@@ -22,7 +22,10 @@ src/
   pages/Home.jsx          hero, the challenge, our solution, Mars facts
   pages/MapPage.jsx       (empty) route map
   pages/VRPage.jsx        (empty) VR experience
-  pages/Credits.jsx       team cards: edit the `team` array
+  components/Wave.jsx     wave edge between coloured sections
+  components/SiteFooter.jsx  footer shared by Home and Credits
+  pages/Credits.jsx       team + tech stack: edit the `team` array,
+                          photos go in public/team/
 ```
 
 Colors and spacing live as CSS variables at the top of `src/index.css`.

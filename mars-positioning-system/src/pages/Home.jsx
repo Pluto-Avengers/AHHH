@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import MarsGlobe from '../components/MarsGlobe.jsx'
+import SiteFooter from '../components/SiteFooter.jsx'
 import TraverseFigure from '../components/TraverseFigure.jsx'
+import Wave from '../components/Wave.jsx'
 
 const problems = [
   {
@@ -59,7 +61,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="challenge" className="band">
+      <section id="challenge" className="band band-spice">
+        <Wave />
         <div className="band-inner split">
           <h2>The challenge</h2>
           <div className="split-body">
@@ -68,9 +71,10 @@ export default function Home() {
               nobody on the radio who can answer right away.
             </p>
             <p>
-              We took on <strong>Interplanetary Survival Guide: Martian Map</strong> from the 2026
-              NASA Space Apps Challenge. It asks teams to build an interactive map that astronauts
-              could use to explore Mars and find their way across it.
+              NASA has explored Mars with robots for decades and mapped its surface in detail. The
+              challenge is to pull data from several of those science missions into one layered
+              view of a place or route, so an explorer can plan a Marswalk, carry it out safely and
+              do new science along the way.
             </p>
 
             <ul className="problems">
@@ -85,7 +89,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="solution" className="band band-solution">
+      <section id="solution" className="band band-black">
+        <Wave />
         <div className="band-inner split">
           <h2>Our solution</h2>
           <div className="split-body">
@@ -125,7 +130,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="mars" className="band">
+      <section id="mars" className="band band-spice">
+        <Wave />
         <div className="band-inner split">
           <h2>Mars, briefly</h2>
           <div className="split-body">
@@ -153,18 +159,11 @@ export default function Home() {
               </tbody>
             </table>
 
-            <p className="about">
-              This site was built in one weekend, November 14 and 15, 2026, for the NASA Space Apps
-              Challenge. <Link to="/credits">Meet the team</Link>.
-            </p>
           </div>
         </div>
       </section>
 
-      <footer className="site-footer">
-        <p>Mars Positioning System. A 2026 NASA Space Apps Challenge project.</p>
-        <p>Made by students. Not affiliated with or endorsed by NASA.</p>
-      </footer>
+      <SiteFooter />
     </>
   )
 }

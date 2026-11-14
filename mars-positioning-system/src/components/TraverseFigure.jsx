@@ -66,14 +66,14 @@ export default function TraverseFigure() {
         <path
           d="M92 356 C170 392 300 404 400 366 C478 336 446 232 508 176 C552 136 596 116 636 92"
           fill="none"
-          stroke="var(--orange)"
-          strokeWidth="3.5"
+          stroke="var(--spice-light)"
+          strokeWidth="4.5"
           strokeLinecap="round"
         />
 
         {/* Landing site */}
-        <circle cx="92" cy="356" r="11" fill="var(--bg)" stroke="var(--orange)" strokeWidth="2.5" />
-        <circle cx="92" cy="356" r="3.5" fill="var(--orange)" />
+        <circle cx="92" cy="356" r="11" fill="var(--bg)" stroke="var(--spice-light)" strokeWidth="2.5" />
+        <circle cx="92" cy="356" r="3.5" fill="var(--spice-light)" />
 
         {/* Sample site */}
         <rect
@@ -82,7 +82,7 @@ export default function TraverseFigure() {
           width="18"
           height="18"
           transform="rotate(45 636 92)"
-          fill="var(--orange)"
+          fill="var(--spice-light)"
         />
 
         <g className="traverse-labels">
