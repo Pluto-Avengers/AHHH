@@ -1,0 +1,813 @@
+/* Map page only: everything is scoped under .map-page */
+.map-page {
+  position: relative;
+  height: calc(100vh - var(--nav-h));
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* Fades in from black after the home-page globe zoom */
+.map-arrive {
+  position: absolute;
+  inset: 0;
+  z-index: 2000;
+  background: #000;
+  pointer-events: none;
+  animation: map-arrive 0.8s ease-out forwards;
+}
+
+@keyframes map-arrive {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.map-page h1 {
+  font-size: 22px;
+}
+
+.map-page h2 {
+  font-size: 14px;
+}
+
+.map-page .muted {
+  color: var(--muted);
+}
+
+.map-page button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.map-page button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.map-page .button {
+  background: none;
+  padding: 9px 16px;
+}
+
+.map-page .button:disabled:hover {
+  background: none;
+  color: var(--text);
+}
+
+.map-page .text-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+}
+
+.map-page .text-button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.map-page .swatch {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ---------- Leaflet map ---------- */
+.mars-leaflet {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+/* No CSS filter/opacity effects on the tiles or markers: on some GPUs (seen on Snapdragon/Adreno)
+   they leave ghost frames while Leaflet animates. The planet is dimmed by a rectangle in its own
+   pane instead (MarsMap.jsx). */
+.mars-leaflet .dim-layer {
+  transition: fill-opacity 1.2s ease;
+}
+
+/* Repaint guard: while the map loads or moves, this near-invisible layer animates, which makes the
+   browser redraw the whole map every frame so stale pixels from the animation can't linger. */
+.mars-leaflet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 450; /* above the map panes, below Leaflet's controls */
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.01);
+}
+
+.mars-leaflet.is-moving::after {
+  animation: map-repaint 0.25s linear infinite alternate;
+}
+
+@keyframes map-repaint {
+  to {
+    opacity: 0.98;
+  }
+}
+
+.mars-leaflet .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--muted);
+}
+
+.mars-leaflet .leaflet-control-attribution a {
+  color: var(--muted);
+}
+
+.mars-leaflet .leaflet-bar a {
+  background: #000;
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.site-marker {
+  overflow: visible;
+}
+
+.site-marker-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e2673a;
+}
+
+.site-marker-label {
+  position: absolute;
+  left: 20px;
+  top: -2px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 2px #000;
+}
+
+.site-marker:hover .site-marker-dot {
+  background: #fff;
+}
+
+/* Miniature 3D terrain markers */
+.site-marker-3d img {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.site-marker-3d:hover img,
+.site-marker-3d:focus-visible img {
+  transform: scale(1.25);
+}
+
+.site-marker-3d .site-marker-label {
+  left: 50%;
+  top: 76px;
+  transform: translateX(-50%);
+}
+
+.leaflet-tooltip.site-tooltip {
+  background: #000;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.leaflet-tooltip.site-tooltip::before {
+  display: none;
+}
+
+/* ---------- Side panels ---------- */
+.map-panel {
+  position: absolute;
+  z-index: 1000;
+  top: 16px;
+  left: 16px;
+  width: 300px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid var(--line);
+}
+
+.map-panel > p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.site-list,
+.route-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.site-list li,
+.route-list li {
+  border-bottom: 1px solid var(--line);
+}
+
+.site-list button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.site-list button:hover span:first-child {
+  text-decoration: underline;
+}
+
+.flying {
+  position: absolute;
+  z-index: 1000;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  background: #000;
+  border: 1px solid var(--line);
+}
+
+/* ---------- 3D site view ---------- */
+.site-view {
+  position: absolute;
+  inset: 0;
+  z-index: 1100;
+  background: #000;
+  animation: site-fade 0.5s ease-out;
+}
+
+@keyframes site-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.terrain-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* keeps the 3D labels (which set their own z-index) under the panels */
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+
+.site-view.is-ready .terrain-scene {
+  opacity: 1;
+}
+
+.terrain-scene canvas {
+  display: block;
+}
+
+.scene-labels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.scene-label {
+  padding: 2px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.scene-label-draft {
+  color: #5ad1ff;
+}
+
+.site-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+}
+
+.site-panel h1 {
+  margin-top: 14px;
+}
+
+.site-panel .site-summary {
+  color: var(--muted);
+}
+
+.site-panel h2 {
+  margin-top: 20px;
+}
+
+.site-panel .route-list {
+  margin-top: 8px;
+}
+
+.route-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.route-list-name {
+  flex: 1;
+}
+
+.route-list button:hover .route-list-name,
+.route-list button.is-selected .route-list-name {
+  text-decoration: underline;
+}
+
+.site-panel .button {
+  margin-top: 16px;
+}
+
+.scene-hint {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Drawing bar */
+.draw-bar {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  width: min(460px, calc(100% - 32px));
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid #5ad1ff;
+}
+
+.draw-bar p {
+  margin: 0;
+}
+
+.draw-bar .draw-message {
+  margin-top: 6px;
+  color: #ffb27a;
+}
+
+.draw-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+/* Route details */
+.route-info {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  max-height: calc(100% - 52px);
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid var(--line);
+}
+
+.route-info header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-info h2 {
+  font-size: 18px;
+}
+
+.route-info h3 {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.route-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  color: var(--muted);
+}
+
+.icon-button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--line);
+}
+
+.route-desc {
+  margin: 10px 0 0;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.route-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 16px 0 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.route-stats div {
+  padding: 10px;
+  background: #000;
+}
+
+.route-stats dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.route-stats dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
+.risk-low {
+  color: #7fd17f;
+}
+
+.risk-moderate {
+  color: #ffc35a;
+}
+
+.risk-high {
+  color: #ff6b5a;
+}
+
+.route-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.profile {
+  margin: 16px 0 0;
+}
+
+.profile figcaption {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile svg {
+  display: block;
+  width: 100%;
+  height: 90px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile-fill {
+  fill: rgba(255, 255, 255, 0.08);
+}
+
+.profile-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.route-stops {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.route-info .text-button {
+  margin-top: 16px;
+  color: #ff6b5a;
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 760px) {
+  .map-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 45%;
+    border-width: 1px 0 0;
+  }
+
+  .route-info {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 60%;
+    z-index: 3;
+    background: #000;
+    border-width: 1px 0 0;
+  }
+
+  .site-view.has-overlay .site-panel {
+    display: none;
+  }
+
+  .draw-bar {
+    top: 16px;
+    bottom: auto;
+  }
+
+  .scene-hint {
+    display: none;
+  }
+}
+
+/* ---------- View switch (3D terrain / 2D tablet map) ---------- */
+.view-toggle {
+  display: flex;
+  margin-top: 16px;
+  border: 1px solid var(--line);
+}
+
+.view-toggle button {
+  flex: 1;
+  padding: 8px 6px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+}
+
+.view-toggle button + button {
+  border-left: 1px solid var(--line);
+}
+
+.view-toggle button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.hazard-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  cursor: pointer;
+}
+
+.hazard-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff7a3d;
+}
+
+/* ---------- 2D tablet map ---------- */
+.map2d {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.site-view.is-ready .map2d {
+  opacity: 1;
+}
+
+.map2d-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* we handle pan and pinch ourselves */
+  cursor: grab;
+  user-select: none;
+}
+
+.map2d-svg:active {
+  cursor: grabbing;
+}
+
+.map2d-svg.is-drawing {
+  cursor: crosshair;
+}
+
+.map2d-svg polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.map2d-casing {
+  stroke: rgba(0, 0, 0, 0.7);
+}
+
+.map2d-hit {
+  stroke: transparent;
+  stroke-width: 32px; /* finger-sized tap target */
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.map2d-svg.is-drawing .map2d-hit {
+  cursor: crosshair;
+}
+
+.map2d-station circle {
+  fill: #ffb27a;
+  stroke: #000;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.map2d-station circle.is-landing {
+  fill: #fff;
+}
+
+.map2d-station text,
+.map2d-draft text {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.85);
+  paint-order: stroke;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.map2d-draft circle {
+  fill: #5ad1ff;
+  stroke: #000;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.map2d-draft text {
+  fill: #000;
+  stroke: none;
+  text-anchor: middle;
+}
+
+.map2d-draft-line {
+  stroke: #5ad1ff;
+  stroke-width: 2px;
+  stroke-dasharray: 8 6;
+}
+
+.map2d-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+}
+
+.map2d-controls button {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 0;
+}
+
+.map2d-controls button + button {
+  border-top: 1px solid var(--line);
+}
+
+.map2d-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.map2d-north {
+  font-weight: 600;
+}
+
+.map2d-scale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map2d-scale span {
+  display: inline-block;
+  height: 6px;
+  border: 1px solid #fff;
+  border-top: 0;
+}
+
+.map2d-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map2d-key i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+
+.key-amber {
+  background: rgba(255, 190, 60, 0.7);
+}
+
+.key-red {
+  background: rgba(255, 60, 40, 0.85);
+}
+
+/* With route details open on the right, keep the map controls clear of the panel */
+.site-view.is-2d.has-overlay .map2d-controls,
+.site-view.is-2d.has-overlay .map2d-legend {
+  right: 352px;
+}
+
+/* ---------- Touch devices: bigger targets ---------- */
+@media (pointer: coarse) {
+  .map-page {
+    font-size: 15px;
+  }
+
+  .map-page .button {
+    min-height: 48px;
+    padding: 12px 20px;
+  }
+
+  .map-page .text-button {
+    min-height: 44px;
+  }
+
+  .view-toggle button {
+    min-height: 44px;
+  }
+
+  .route-list button,
+  .site-list button {
+    min-height: 52px;
+  }
+
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hazard-toggle input {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+@media (max-width: 760px) {
+  .site-view.is-2d.has-overlay .map2d-controls,
+  .site-view.is-2d.has-overlay .map2d-legend {
+    right: 16px;
+  }
+
+  .map2d-controls {
+    top: 16px;
+    bottom: auto;
+  }
+}
