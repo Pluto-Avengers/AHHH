@@ -1,0 +1,49 @@
+:root {
+  /* Theme: black with Mars orange. Change these to retheme the whole site. */
+  --bg: #000;
+  --text: #f4ede6;
+  --muted: #a89a8d;
+  --line: #2b211a;
+  --orange: #ff6b1a;
+  --orange-soft: #ffa25c;
+  --rust: #8a3410;
+  --nav-h: 56px;
+
+  color-scheme: dark;
+  font-family: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--orange);
+  color: #000;
+}
