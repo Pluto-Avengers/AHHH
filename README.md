@@ -1,16 +1,27 @@
-# React + Vite
+# Mars Positioning System
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+NASA Space Apps Challenge project: a mapping system that plans safe traverse routes
+around Mars landing sites so astronauts can commute safely and collect data.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+## Structure
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+src/
+  App.jsx                 routes (/, /map, /vr, /credits)
+  components/Navbar.jsx   top navigation (collapses to a menu on mobile)
+  components/MarsGlobe.jsx  rotating three.js Mars globe (home hero)
+  lib/marsTexture.js      procedural Mars surface texture
+  pages/Home.jsx          hero + "Explore Mars" button
+  pages/MapPage.jsx       (empty) route map
+  pages/VRPage.jsx        (empty) VR experience
+  pages/Credits.jsx       team cards: edit the `team` array
+```
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Colors and spacing live as CSS variables at the top of `src/index.css`.
