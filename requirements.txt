@@ -1,0 +1,2 @@
+# Installed by Vercel for the functions in api/. Same library as backend/requirements.txt.
+ollama>=0.6
