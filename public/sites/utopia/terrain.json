@@ -1,0 +1,1 @@
+{"id": "utopia", "rows": 355, "cols": 357, "cell_m": [14.99, 15.005], "elevation": [-4127.12, -4073.61], "bounds": [[25.009999999999998, 109.875], [25.1, 109.975]], "stations": [{"name": "Zhurong landing site", "lat": 25.066, "lon": 109.925, "rc": [134.19, 178.9]}, {"name": "Nearby high ground", "lat": 25.042508, "lon": 109.907784, "rc": [226.9, 117.3]}], "reference": null}
