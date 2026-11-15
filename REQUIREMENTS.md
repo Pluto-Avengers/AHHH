@@ -14,6 +14,16 @@ besides them.
 | **A modern browser with WebGL** | Chrome, Edge, Firefox or Safari. The globe, 3D terrain and VR all use WebGL. |
 | **Port 5173 free** | The dev server uses it and won't start on another port. `npm run preview` uses 4173. |
 
+## For Martial, the navigation agent
+
+| Requirement | Why |
+| --- | --- |
+| **Python 3.10+** | Runs the agent's back end (`python -m backend.server`). Install its one library with `pip install -r backend/requirements.txt`. |
+| **Ollama with `llama3.2`** | The language model behind Martial. Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` (about 2 GB). Without it, Martial still answers from map data. |
+| **Port 8000 free** | The back end listens there; the dev server forwards `/api` to it. Change with `MPS_PORT`. |
+
+On a computer without a graphics card the model answers in about a minute.
+
 ## For VR (Meta Quest 3)
 
 | Requirement | Why |
@@ -28,7 +38,6 @@ No Developer Mode, cable or phone app is needed.
 
 | | |
 | --- | --- |
-| **Python** | Only for `scripts/export_sites.py` and `scripts/export_globe_texture.py`, which remake the data in `public/`. That data is already included. |
 | **A NASA account or API key** | Mars Trek imagery is public. |
 | **Git** | Only to clone the repo; downloading it as a zip works too. |
 
@@ -37,6 +46,11 @@ No Developer Mode, cable or phone app is needed.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
+
+# second terminal, for Martial
+pip install -r backend/requirements.txt
+ollama pull llama3.2
+python -m backend.server
 ```
 
 For the Quest:

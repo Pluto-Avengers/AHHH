@@ -1,7 +1,7 @@
 // Route objects shared by the Map page (2D and 3D) and the VR page.
 import { cellsFromPolyline, planRoute, routeStats } from './router.js'
 
-export const ROUTE_COLORS = { recommended: '#ff7a3d', reference: '#ffffff', custom: '#5ad1ff' }
+export const ROUTE_COLORS = { recommended: '#ff7a3d', reference: '#ffffff', custom: '#5ad1ff', agent: '#ffd23d' }
 
 /** The site's built-in routes: the recommended traverse and (if any) the real rover drive. */
 export function builtInRoutes(grid) {

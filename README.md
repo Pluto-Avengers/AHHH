@@ -10,6 +10,30 @@ npm install
 npm run dev
 ```
 
+In a second terminal, start Martial, the navigation agent (needs [Ollama](https://ollama.com) with `llama3.2`):
+
+```bash
+pip install -r backend/requirements.txt
+ollama pull llama3.2
+python -m backend.server        # http://127.0.0.1:8000; the dev server forwards /api to it
+```
+
+## Martial, the navigation agent
+
+Open a landing site on the map and press **Ask Martial**. `MarsOllama.py` holds the agent: a router and two
+skills, each with its own instructions.
+
+| Skill | Ask for | Martial does |
+| --- | --- | --- |
+| Navigation procedure | directions between two coordinates, or "landing site" / "stop N" | plans the safest path on the terrain map, cuts it into legs and writes a formal step-by-step procedure; the route appears on the map |
+| Route preference | a kind of route: fastest, longest, rockiest, least rocky, highest or lowest point | compares the routes on the map plus safest and most direct paths to each science stop, and highlights the best match |
+
+All numbers (coordinates, headings, distances, elevations, slopes, roughness) come from the same site terrain the
+map draws (`public/sites/`), read by `backend/mars_map.py`. A navigation procedure is accepted from the model only
+when its steps match the map exactly; otherwise, or when Ollama isn't running, Martial writes it straight from the
+map data. Settings: `MARTIAL_MODEL` (default `llama3.2`), `OLLAMA_HOST`, `MPS_PORT` (default `8000`).
+Try it without the website: `python MarsOllama.py jezero "Find me the least rocky route"`.
+
 ## Structure
 
 ```
@@ -22,6 +46,11 @@ src/
   pages/MapPage.jsx       (empty) route map
   pages/VRPage.jsx        (empty) VR experience
   pages/Credits.jsx       team cards: edit the `team` array
+  map/MartialChat.jsx     chat panel for the Martial agent
+MarsOllama.py             the agent: router + skill instructions (Ollama)
+backend/mars_map.py       site terrain, routing and route measurements for the agent
+backend/server.py         HTTP API the website calls (/api/agent, /api/health)
+public/martial/           Martial's avatar (tongue out at rest, in while speaking)
 ```
 
 Colors and spacing live as CSS variables at the top of `src/index.css`.

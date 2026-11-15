@@ -53,7 +53,7 @@ export default function RouteInfo({ route, onClose, onDelete }) {
         <div>
           <p className="route-kind">
             <span className="swatch" style={{ background: route.color }} />
-            {KIND_LABEL[route.kind]}
+            {route.agent ? 'Planned by Martial' : KIND_LABEL[route.kind]}
           </p>
           <h2>{route.name}</h2>
         </div>

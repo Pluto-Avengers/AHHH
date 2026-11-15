@@ -811,3 +811,230 @@
     bottom: auto;
   }
 }
+
+/* ---------- Martial, the navigation agent ---------- */
+.martial-face {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--spice-light);
+}
+
+.martial-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Tongue out by default; it goes in while Martial speaks. */
+.martial-face .martial-face-speaking,
+.martial-face.is-speaking .martial-face-idle {
+  visibility: hidden;
+}
+
+.martial-face.is-speaking .martial-face-speaking {
+  visibility: visible;
+}
+
+.martial-launcher {
+  position: absolute;
+  z-index: 3;
+  left: 332px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 6px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 40px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.martial-launcher:hover {
+  border-color: var(--spice-light);
+}
+
+.martial-chat {
+  position: absolute;
+  z-index: 3;
+  left: 332px;
+  bottom: 16px;
+  width: min(420px, calc(100% - 348px));
+  height: min(620px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.93);
+  border: 1px solid var(--line);
+}
+
+.martial-chat header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.martial-chat header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.martial-chat h2 {
+  font-size: 18px;
+}
+
+.martial-chat header p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.martial-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+.martial-intro p {
+  margin: 0 0 10px;
+}
+
+.martial-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.martial-suggestions button {
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.martial-suggestions button:hover {
+  border-color: var(--spice-light);
+}
+
+.martial-msg {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+}
+
+.martial-msg.from-user {
+  margin-left: 40px;
+  background: var(--rust);
+  border-color: var(--spice);
+}
+
+.martial-msg.from-martial {
+  margin-right: 12px;
+}
+
+.martial-msg.is-error {
+  border-color: #8a2b20;
+}
+
+.martial-msg.is-pending pre {
+  color: var(--muted);
+}
+
+.martial-msg pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.martial-msg.from-user pre {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.martial-skill {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffd23d;
+}
+
+.martial-shown {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.martial-input {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.martial-input textarea {
+  flex: 1;
+  resize: none;
+  padding: 8px 10px;
+  background: #000;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.martial-input textarea:focus {
+  border-color: var(--spice-light);
+  outline: none;
+}
+
+.martial-input .button {
+  align-self: stretch;
+}
+
+@media (max-width: 760px) {
+  .martial-launcher {
+    left: 16px;
+    top: 16px;
+    bottom: auto;
+    padding: 4px;
+  }
+
+  .martial-launcher span:last-child {
+    display: none;
+  }
+
+  .martial-chat {
+    position: fixed;
+    z-index: 2000;
+    inset: var(--nav-h) 0 0 0;
+    width: auto;
+    height: auto;
+    border-width: 1px 0 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .site-view:has(.draw-bar) .martial-launcher {
+    display: none;
+  }
+}

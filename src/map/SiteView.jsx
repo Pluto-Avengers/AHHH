@@ -5,6 +5,7 @@ import TerrainScene from './TerrainScene.jsx'
 import { VERTICAL_EXAGGERATION } from './terrainMesh.js'
 import RouteInfo from './RouteInfo.jsx'
 import Map2D from './Map2D.jsx'
+import MartialChat from './MartialChat.jsx'
 
 // 3D terrain or the 2D tablet map. Touch devices start in 2D; the last choice is remembered.
 const MODE_KEY = 'mps-site-view'
@@ -65,7 +66,7 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
     setMessage(null)
   }
   const createRoute = () => {
-    const { route, error } = customRoute(grid, draft, customRoutes.length + 1)
+    const { route, error } = customRoute(grid, draft, customRoutes.filter((r) => !r.agent).length + 1)
     if (error) {
       setMessage(error)
       return
@@ -74,6 +75,12 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
     setDrawing(false)
     setDraft([])
     setMessage(null)
+    setSelectedId(route.id)
+  }
+  // Martial planned or chose a route: add it to the map (once) and select it.
+  const addAgentRoute = (route) => {
+    if (!routes.some((r) => r.id === route.id)) onCustomRoutesChange([...customRoutes, route])
+    setDrawing(false)
     setSelectedId(route.id)
   }
   const deleteRoute = (id) => {
@@ -206,6 +213,19 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
           route={selected}
           onClose={() => setSelectedId(null)}
           onDelete={selected.kind === 'custom' ? () => deleteRoute(selected.id) : null}
+        />
+      )}
+
+      {grid && (
+        <MartialChat
+          site={site}
+          grid={grid}
+          routes={routes}
+          onRoute={addAgentRoute}
+          onHighlight={(id) => {
+            setDrawing(false)
+            setSelectedId(id)
+          }}
         />
       )}
 
