@@ -18,6 +18,20 @@ class SkillRouter:
     # Two named places and a request to be taken there: directions, without asking the model
     ASKS_FOR_DIRECTIONS = re.compile(r"\b(?:directions?|how (?:do|can|should) i get|take me|guide me|navigate|walk me)\b", re.IGNORECASE)
 
+    # Words that show a request is about getting around the site. A message with none of them (and no
+    # place, coordinates or compass direction) isn't something Martial can plan a route for.
+    TOPIC_WORDS = re.compile(
+        r"\b(?:route|path|trail|travers|way\b|go\b|goes|going|get\b|gets|getting|head|walk|hik|driv|travel|trip|"
+        r"journey|mov|reach|visit|explor|tour|stop|waypoint|destination|depart|start|finish|end\b|arriv|leav|"
+        r"return|back\b|landing|site|station|crater|rim|ridge|hill|mountain|mesa|butte|valley|canyon|channel|"
+        r"delta|dune|sand|rock|boulder|terrain|ground|surface|slope|summit|peak|top\b|bottom|map\b|direction|"
+        r"navigat|far\b|near|close|distance|km\b|kilomet|met(?:er|re)s?\b|mile|coordinat|latitude|longitude|"
+        r"storm|dust|avoid|sample|science|rover|perseverance|curiosity|spirit|opportunity|pathfinder|sojourner|"
+        r"insight|zhurong|where|pin\b|here\b|there\b|elevation|altitude|climb|descen|uphill|downhill|"
+        r"left\b|right\b|straight|forward|turn|view|vista|lookout|sight)",
+        re.IGNORECASE,
+    )
+
     def __init__(self, llm, skills):
         """skills: {name: Skill}, with "NAVIGATION" and "ROUTE_PREFERENCE"."""
         self.llm = llm
@@ -27,6 +41,14 @@ class SkillRouter:
         """The Skill for this request: certain cases by rule, otherwise the model decides,
         with a keyword rule when Ollama is offline or answers badly."""
         return self.skills[self._skill_name(request)]
+
+    def is_on_topic(self, request):
+        """Is the request about routes or getting around the site? ("what did I do today" is not.)"""
+        message = request.message
+        if any(rx.search(message) for rx in (self.TOPIC_WORDS, self.PREFERENCE_WORDS, self.ASKS_FOR_DIRECTIONS)):
+            return True
+        points, _ = request.reader.points(message)
+        return bool(points) or DirectionCue.mentions_direction(message)
 
     def _skill_name(self, request):
         points, _ = request.reader.points(request.message)
