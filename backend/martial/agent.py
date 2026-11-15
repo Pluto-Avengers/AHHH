@@ -65,6 +65,8 @@ class MartialAgent:
             dest = reader.off_map_destination(message)
             if dest:  # the Moon, Earth, another landing site...: refuse before any route is chosen
                 raise AgentError(self._not_on_map(request.site, dest, reader.known_places()))
+            if not self.router.is_on_topic(request):  # nothing to do with routes: say so, plan nothing
+                return {"skill": "OFF_TOPIC", "source": "map", "reply": self._off_topic(request.site, grid)}
             return self.router.choose(request).run(request)
         except NeedsInfo as q:
             return {
@@ -74,6 +76,21 @@ class MartialAgent:
                 "choices": q.choices,
                 "pending": {"message": message, "need": q.need, "choices": q.choices},
             }
+
+    @staticmethod
+    def _off_topic(site, grid):
+        """The answer to a request that isn't about routes: what Martial can do instead."""
+        stop = grid.stations[1]["name"] if len(grid.stations) > 1 else grid.stations[0]["name"]
+        return "\n".join([
+            "THAT'S OUTSIDE MY FIELD",
+            f"I'm Martial, your navigation guide at {site['name']}, so I can only help with getting around "
+            "this site: routes, directions, stops and the ground in between.",
+            "",
+            "TRY ASKING",
+            f'1. "Take me to {stop}"',
+            '2. "Which route has the least radiation?"',
+            '3. "Walk me 500 m north of the landing site"',
+        ])
 
     @staticmethod
     def _check_stops_are_clear(reader, message):
