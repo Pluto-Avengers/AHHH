@@ -1,3 +1,4 @@
+import MartialReply from './martial/MartialReply.jsx'
 import Coordinates from '../core/Coordinates.js'
 import RoutePlanner from '../core/RoutePlanner.js'
 
@@ -92,22 +93,16 @@ export default function RouteInfo({ route, onClose, onDelete }) {
 
       <Profile profile={stats.profile} />
 
-      {route.directions?.length > 0 && (
-        <details className="route-directions" key={route.id}>
+      {route.guide && (
+        <details className="route-directions" key={`${route.id}-${route.cells.length}`}>
           <summary>
             <span>Directions</span>
-            <span className="muted">{route.directions.filter((d) => !['start', 'stop', 'arrive'].includes(d.kind)).length} legs</span>
+            <span className="muted">{(route.guide.match(/^LEG \d+/gm) ?? []).length} legs</span>
           </summary>
-          <ol>
-            {route.directions.map((step, k) => (
-              <li key={k} className={`dir-${step.kind}`}>
-                <span className="dir-arrow" aria-hidden="true">
-                  {step.arrow}
-                </span>
-                <span>{step.text}</span>
-              </li>
-            ))}
-          </ol>
+          {/* the same layout as Martial's replies in the chat */}
+          <div className="route-guide">
+            <MartialReply text={route.guide} />
+          </div>
         </details>
       )}
 

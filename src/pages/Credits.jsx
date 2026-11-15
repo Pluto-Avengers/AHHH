@@ -1,14 +1,13 @@
 import SiteFooter from '../components/SiteFooter.jsx'
 import Wave from '../components/Wave.jsx'
 
-// Replace these placeholders with your team's details.
-// Put photos in public/team/ and set `photo` to the path, e.g. '/team/alex.jpg'.
+// The team, in the order shown. Photos live in public/team/.
 const team = [
-  { name: 'Team Member 1', role: 'Role', photo: null },
-  { name: 'Team Member 2', role: 'Role', photo: null },
-  { name: 'Team Member 3', role: 'Role', photo: null },
-  { name: 'Team Member 4', role: 'Role', photo: null },
-  { name: 'Team Member 5', role: 'Role', photo: null },
+  { name: 'Ryan Calixte', role: 'Project Lead', photo: '/team/ryan.jpg' },
+  { name: 'Emma Boudreaux', role: 'AI Engineer', photo: '/team/emma.jpg' },
+  { name: 'Valery Macena', role: 'Backend Developer', photo: '/team/valery.jpg' },
+  { name: 'Mia Mandili', role: 'AI Engineer', photo: '/team/mia.jpg' },
+  { name: 'Gabriel Sharipov', role: 'Frontend Developer', photo: '/team/gabriel.jpg' },
 ]
 
 const stack = [

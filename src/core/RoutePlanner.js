@@ -2,7 +2,7 @@
 // Routes stay plain data objects (they live in React state and are sent to the agent);
 // RoutePlanner is what builds them for one site's terrain.
 import { HAZARD_SLOPE, MAX_SLOPE } from './TerrainGrid.js'
-import RouteDirections from './RouteDirections.js'
+import RouteGuide from './RouteGuide.js'
 
 export const ROUTE_COLORS = { recommended: '#ff7a3d', reference: '#ffffff', custom: '#5ad1ff', agent: '#ffd23d' }
 
@@ -38,9 +38,9 @@ export default class RoutePlanner {
     })
   }
 
-  /** Turn-by-turn directions along the path (see RouteDirections). */
-  #directions(cells, stopCells, stops) {
-    return new RouteDirections(this.grid).describe(cells, stopCells, stops)
+  /** The route with its directions, in the same format as Martial's (see RouteGuide). */
+  #withGuide(route, stops = route.stops) {
+    return { ...route, guide: new RouteGuide(this.grid).write({ ...route, stops }) }
   }
 
   #stormNote(text) {
@@ -53,7 +53,7 @@ export default class RoutePlanner {
     const routes = []
     const planned = grid.planRoute(grid.stations.map((s) => s.rc))
     if (!planned.error) {
-      routes.push({
+      routes.push(this.#withGuide({
         id: 'recommended',
         kind: 'recommended',
         name: 'Recommended traverse',
@@ -66,11 +66,6 @@ export default class RoutePlanner {
         stats: grid.routeStats(planned.cells),
         cellM: this.#cellM,
         stormNote: this.#stormNote('Planned around the {storm}.'),
-        directions: this.#directions(
-          planned.cells,
-          planned.stopCells,
-          grid.stations.map((s, k) => ({ name: k === 0 ? s.name : `Stop ${k}: ${s.name}` })),
-        ),
         // The stations' own coordinates (as Martial quotes them).
         stops: grid.stations.map((s, k) => ({
           name: k === 0 ? s.name : `Stop ${k}: ${s.name}`,
@@ -78,13 +73,13 @@ export default class RoutePlanner {
           lat: s.lat,
           lon: s.lon,
         })),
-      })
+      }))
     }
     if (grid.reference) {
       const cells = grid.cellsFromPolyline(grid.reference.rc)
       if (cells.length > 1) {
         const crosses = Boolean(grid.blocked) && cells.some((i) => grid.blocked[i])
-        routes.push({
+        routes.push(this.#withGuide({
           id: 'reference',
           kind: 'reference',
           name: grid.reference.name,
@@ -94,9 +89,9 @@ export default class RoutePlanner {
           cells,
           stats: grid.routeStats(cells),
           cellM: this.#cellM,
-          directions: this.#directions(cells, [cells[0], cells.at(-1)], [{ name: "the drive's first point in this area" }, { name: "the drive's last point in this area" }]),
+          stopCells: [cells[0], cells.at(-1)],
           stormNote: crosses ? this.#stormNote('Part of this drive is inside the {storm}. It is shown for reference only.') : null,
-        })
+        }, [{ name: "the drive's first point in this area" }, { name: "the drive's last point in this area" }]))
       }
     }
     return routes
@@ -113,7 +108,7 @@ export default class RoutePlanner {
       name: names?.[k] ?? (k === 0 ? 'Start' : k === points.length - 1 ? 'End' : `Point ${k + 1}`),
     }))
     return {
-      route: {
+      route: this.#withGuide({
         id: `custom-${Date.now()}`,
         kind: 'custom',
         name: `Your route ${n}`,
@@ -125,14 +120,16 @@ export default class RoutePlanner {
         stats: this.grid.routeStats(planned.cells),
         cellM: this.#cellM,
         stops: this.#locate(stops, planned.stopCells),
-        directions: this.#directions(planned.cells, planned.stopCells, stops),
-      },
+      }),
     }
   }
 
-  /** A route Martial planned (the `route` of an /api/agent reply), ready for the map. */
-  agentRoute(r) {
-    return {
+  /**
+   * A route Martial planned (the `route` of an /api/agent reply), ready for the map. `reply`: his
+   * directions for it, shown as the route's directions word for word (else they are written here).
+   */
+  agentRoute(r, reply = null) {
+    const route = {
       id: r.id,
       kind: 'custom',
       agent: true,
@@ -143,10 +140,10 @@ export default class RoutePlanner {
       cells: r.cells,
       stopCells: r.stopCells,
       stops: this.#locate(r.stops ?? [], r.stopCells),
-      directions: this.#directions(r.cells, r.stopCells ?? [], r.stops ?? []),
       stats: this.grid.routeStats(r.cells),
       cellM: this.#cellM,
     }
+    return reply ? { ...route, guide: reply } : this.#withGuide(route)
   }
 
   /**
@@ -159,7 +156,7 @@ export default class RoutePlanner {
     if (!route.waypoints) return { ...route, stormNote: this.#stormNote('This route crosses the {storm}.') }
     const planned = grid.planRoute(route.waypoints)
     if (planned.error) return { ...route, stormNote: `This route can't avoid the ${grid.blockedReason}: ${planned.error}` }
-    return {
+    return this.#withGuide({
       ...route,
       cells: planned.cells,
       stopCells: planned.stopCells,
@@ -168,8 +165,7 @@ export default class RoutePlanner {
         route.stops.map(({ lat, lon, ...s }) => s), // eslint-disable-line no-unused-vars
         planned.stopCells,
       ),
-      directions: this.#directions(planned.cells, planned.stopCells, route.stops),
       stormNote: this.#stormNote('Re-planned to go around the {storm}.'),
-    }
+    })
   }
 }

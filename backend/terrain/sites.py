@@ -19,8 +19,15 @@ class SiteCatalog:
 
     def __init__(self):
         self._grids = {}  # (site id, storm on?) -> grid
-        self.storms = DustStorm.load_all()  # site id -> DustStorm, for the sites that have one
+        self._storms = None  # site id -> DustStorm, read on first use (hosted, it is downloaded)
         self._lock = threading.Lock()  # the server answers requests on several threads
+
+    @property
+    def storms(self):
+        """{site id: DustStorm} for the sites that have one."""
+        if not self._storms:  # also tried again if the file couldn't be read yet
+            self._storms = DustStorm.load_all()
+        return self._storms
 
     @property
     def ids(self):

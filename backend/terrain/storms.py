@@ -8,6 +8,8 @@ latitude/longitude points; a grid cell is inside when its centre is inside the o
 import json
 from pathlib import Path
 
+from .files import read_public_file
+
 STORMS_FILE = Path(__file__).resolve().parent.parent.parent / "public" / "storms.json"
 
 
@@ -20,9 +22,10 @@ class DustStorm:
     @classmethod
     def load_all(cls, path=STORMS_FILE):
         """{site id: DustStorm} for every site that has one (none if the file is missing)."""
-        if not Path(path).exists():
+        try:  # from disk, or downloaded from the website when hosted (see files.py)
+            data = json.loads(read_public_file("storms.json", path).decode("utf-8"))
+        except (OSError, ValueError):
             return {}
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
         return {sid: cls(sid, s["name"], s["polygon"]) for sid, s in data.get("storms", {}).items()}
 
     def outline_rc(self, grid):

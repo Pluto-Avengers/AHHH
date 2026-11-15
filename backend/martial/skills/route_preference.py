@@ -71,6 +71,7 @@ class RoutePreferenceSkill(Skill):
         else:
             reply = self._model_reply(mission, chosen, reply, message)
 
+        reply += "\n\n" + self._why(grid, points, departure, chosen, routes, message)
         result = {"skill": self.name, "source": source, "reply": reply, "highlight": chosen["id"]}
         if chosen["new"]:
             result["route"] = {
@@ -82,6 +83,32 @@ class RoutePreferenceSkill(Skill):
                 "stops": [{"name": "Departure"}, {"name": chosen["destination"]}],
             }
         return result
+
+    @staticmethod
+    def _why(grid, points, departure, chosen, routes, message):
+        """Why the chosen route starts and ends where it does, and why it was picked over the others."""
+        if departure:
+            start = f"You asked to start from {points[0].station or points[0].label}, so every route I compared starts there."
+        elif chosen["new"]:
+            start = f"You didn't say where to start, so I compared routes from the landing site, {grid.stations[0]['name']}."
+        else:
+            start = "This is a route already on your map, so it starts where it was planned to start."
+        dest = chosen["destination"]
+        end = (
+            f"It ends at {dest}: of all the routes I compared, the one to {dest} fits your request best."
+            if dest != "Unnamed point"
+            else "It ends where that route on your map ends."
+        )
+        s = chosen["stats"]
+        others = len(routes) - 1
+        path = (
+            f"I compared {len(routes)} route{'s' if len(routes) != 1 else ''} (the ones on your map, plus the safest, "
+            f"most radiation-shielded and most direct paths to every stop) and this one matches \"{message.strip()[:60]}\" best: "
+            f"{s['distance_m']:.0f} m, steepest slope {s['max_slope']}°, about {s['dose_ugy']:.1f} µGy of radiation."
+            if others
+            else "It is the only safe route I found from that starting point."
+        )
+        return "\n".join(["WHY THIS ROUTE", f"STARTING POINT: {start}", f"DESTINATION: {end}", f"THE PATH: {path}"])
 
     @staticmethod
     def _table_row(r):

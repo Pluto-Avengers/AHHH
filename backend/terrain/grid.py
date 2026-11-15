@@ -13,6 +13,7 @@ from array import array
 from pathlib import Path
 
 from .coordinates import Coordinates
+from .files import read_public_file
 
 SITES_DIR = Path(__file__).resolve().parent.parent.parent / "public" / "sites"
 
@@ -42,7 +43,11 @@ class TerrainGrid:
 
     def __init__(self, site_id, sites_dir=SITES_DIR):
         folder = Path(sites_dir) / site_id
-        terrain = json.loads((folder / "terrain.json").read_text(encoding="utf-8"))
+
+        def read(name):  # from disk, or downloaded from the website when hosted (see files.py)
+            return read_public_file(f"sites/{site_id}/{name}", folder / name)
+
+        terrain = json.loads(read("terrain.json").decode("utf-8"))
         self.id = site_id
         self.rows = terrain["rows"]
         self.cols = terrain["cols"]
@@ -51,10 +56,15 @@ class TerrainGrid:
         self.stations = terrain["stations"]
         self.reference = terrain.get("reference")
         self.height = array("f")
-        self.height.frombytes((folder / "height.bin").read_bytes())
-        self.slope = (folder / "slope.bin").read_bytes()
-        sky = folder / "sky.bin"  # radiation shielding; missing = open sky everywhere
-        self.sky = sky.read_bytes() if sky.exists() else bytes([254]) * len(self.slope)
+        self.height.frombytes(read("height.bin"))
+        self.slope = read("slope.bin")
+        cells = self.rows * self.cols
+        if len(self.height) != cells or len(self.slope) != cells:
+            raise OSError(f"The terrain files for {site_id} are incomplete or the wrong size.")
+        try:  # radiation shielding; missing = open sky everywhere
+            self.sky = read("sky.bin")
+        except OSError:
+            self.sky = b""
         if len(self.sky) != len(self.slope):
             self.sky = bytes([254]) * len(self.slope)
         self._least = {}  # radiation weight -> cheapest radiation factor on the site

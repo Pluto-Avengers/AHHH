@@ -1,4 +1,2 @@
-Put team photos in this folder (square images work best, e.g. 600x600).
-Then set each person's `photo` in src/pages/Credits.jsx, for example:
-
-  { name: 'Alex Rivera', role: 'Frontend', photo: '/team/alex.jpg' }
+Team photos for the Credits page. To change one, replace the file here (keep the same name),
+or add a new file and update the `team` list at the top of src/pages/Credits.jsx.

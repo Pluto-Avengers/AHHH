@@ -2214,3 +2214,13 @@
 .martial-choices button:hover {
   filter: brightness(1.1);
 }
+
+/* Route details: directions laid out like Martial's replies */
+.route-guide {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.route-guide .martial-reply {
+  font-size: 13.5px;
+}
