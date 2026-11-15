@@ -37,9 +37,7 @@ export default function Credits() {
                 {member.photo ? (
                   <img className="photo" src={member.photo} alt={`Portrait of ${member.name}`} />
                 ) : (
-                  <div className="photo photo-empty" aria-hidden="true">
-                    Photo
-                  </div>
+                  <div className="photo photo-empty" aria-hidden="true" />
                 )}
                 <h2>{member.name}</h2>
                 <p>{member.role}</p>
@@ -54,8 +52,6 @@ export default function Credits() {
         <div className="band-inner split">
           <h2>Built with</h2>
           <div className="split-body">
-            <p className="lead">A small set of web tools, nearly all of them open source.</p>
-
             <table className="compare stack">
               <tbody>
                 {stack.map((tool) => (

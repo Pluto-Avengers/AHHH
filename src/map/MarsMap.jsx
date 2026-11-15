@@ -1,20 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
-import { MapContainer, Marker, Pane, Rectangle, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet'
+import { MapContainer, Marker, Pane, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { renderThumbnails } from './thumbnails.js'
+import ThumbnailRenderer from '../three/ThumbnailRenderer.js'
 import { TILES } from './tiles.js'
+import Coordinates from '../core/Coordinates.js'
 
 const WORLD = [[-90, -180], [90, 180]]
 
 // Marker: a miniature 3D render of the site's terrain once it's ready, a plain dot until then.
+// site.marker places the miniature for sites close together on the world map, so they don't overlap:
+// 'above' / 'below' hang it above or below its point; 'above-right' hangs it above with the label beside it.
+const THUMB = [84, 63]
+const ANCHOR_Y = { above: THUMB[1], 'above-right': THUMB[1], below: 0 }
+const LABEL_CLASS = { above: ' label-above', 'above-right': ' label-right' }
 const siteIcon = (site, thumb) =>
   thumb
     ? L.divIcon({
-        className: 'site-marker site-marker-3d',
-        html: `<img src="${thumb}" alt="" width="104" height="78" /><span class="site-marker-label">${site.name}</span>`,
-        iconSize: [104, 78],
-        iconAnchor: [52, 46],
+        className: `site-marker site-marker-3d${LABEL_CLASS[site.marker] ?? ''}`,
+        html: `<img src="${thumb}" alt="" width="${THUMB[0]}" height="${THUMB[1]}" /><span class="site-marker-label">${site.name}</span>`,
+        iconSize: THUMB,
+        iconAnchor: [THUMB[0] / 2, ANCHOR_Y[site.marker] ?? Math.round(THUMB[1] * 0.6)],
       })
     : L.divIcon({
         className: 'site-marker',
@@ -57,6 +63,39 @@ function RepaintGuard() {
   return null
 }
 
+/** Click anywhere on Mars to see its coordinates (closes when you fly to a site). */
+function ClickCoordinates({ enabled }) {
+  const [point, setPoint] = useState(null)
+  useMapEvents({
+    click: (e) => enabled && setPoint([e.latlng.lat, e.latlng.lng]),
+  })
+  if (!enabled || !point) return null
+  const [lat, lon] = point
+  return (
+    <Popup position={point} eventHandlers={{ remove: () => setPoint(null) }} className="coords-popup">
+      <strong>{Coordinates.point(lat, Coordinates.wrapLon(lon))}</strong>
+    </Popup>
+  )
+}
+
+const FOUND_ICON = L.divIcon({ className: 'found-pin', html: '<span></span>', iconSize: [22, 22], iconAnchor: [11, 11] })
+
+/** A point typed into the coordinate search: pinned, with its coordinates, and flown to. */
+function FoundPin({ found }) {
+  const map = useMap()
+  useEffect(() => {
+    if (found) map.flyTo([found.lat, found.lon], Math.max(map.getZoom(), 4), { duration: 1.2 })
+  }, [map, found])
+  if (!found) return null
+  return (
+    <Marker position={[found.lat, found.lon]} icon={FOUND_ICON} keyboard={false} interactive={false}>
+      <Tooltip permanent direction="top" offset={[0, -12]} className="coords-tip">
+        {Coordinates.point(found.lat, found.lon)}
+      </Tooltip>
+    </Marker>
+  )
+}
+
 /** Flies to the chosen site (then calls onArrive) or back out to the whole planet. */
 function FlyController({ target, onArrive }) {
   const map = useMap()
@@ -80,12 +119,12 @@ function FlyController({ target, onArrive }) {
   return null
 }
 
-export default function MarsMap({ sites, target, onSelect, onArrive }) {
+export default function MarsMap({ sites, target, found, onSelect, onArrive }) {
   const [thumbs, setThumbs] = useState({})
 
   useEffect(() => {
     let cancelled = false
-    renderThumbnails(
+    new ThumbnailRenderer().renderAll(
       sites.map((s) => s.id),
       (id, url) => !cancelled && setThumbs((t) => ({ ...t, [id]: url })),
     ).catch(() => {}) // markers just stay as dots if WebGL or a download fails
@@ -146,6 +185,8 @@ export default function MarsMap({ sites, target, onSelect, onArrive }) {
 
       {target && <Rectangle bounds={target.bounds} pathOptions={{ color: '#ffffff', weight: 1, fill: false }} />}
 
+      <ClickCoordinates enabled={!target} />
+      <FoundPin found={found} />
       <FlyController target={target} onArrive={onArrive} />
     </MapContainer>
   )

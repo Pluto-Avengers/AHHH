@@ -1,20 +1,29 @@
-import { useEffect, useMemo, useState } from 'react'
-import { hazardCanvas } from '../map/hazards.js'
-import { ButtonRow, CanvasPanel, DraggableWindow, VRButton } from './ui.jsx'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import { useFrame } from '@react-three/fiber'
+import { ButtonRow, CanvasPanel, DraggableWindow, TITLE_H, VRButton } from './ui.jsx'
 import { isDrag } from './input.js'
-import { drawEVA, drawMap, drawStatus, FONT } from './draw.js'
+import PanelPainter from './PanelPainter.js'
 
 const MAP_W = 0.74 // window width (m)
 const MAP_BOX = [0.7, 0.5] // map area inside it (m)
 const NEAR_WIDTH_M = 1200 // "Around me" zoom: this many meters across
 
-/** Grid area to show: the whole site, or ~1.2 km around you, letterboxed to the map box. */
+/**
+ * Grid area to show: the whole site, or ~1.2 km around you, letterboxed to the map box.
+ * The 'near' view moves in steps (a sixth of its width), so the map image is redrawn only now and
+ * then while you walk; the marker for you moves smoothly on top of it (PlayerMarker).
+ */
 function mapView(grid, player, zoom) {
   const aspect = MAP_BOX[1] / MAP_BOX[0] // height / width
   if (zoom === 'near') {
     const wc = NEAR_WIDTH_M / grid.cw
     const hr = (NEAR_WIDTH_M * aspect) / grid.ch
-    return { c0: player.c - wc / 2, c1: player.c + wc / 2, r0: player.r - hr / 2, r1: player.r + hr / 2 }
+    const stepC = wc / 6
+    const stepR = hr / 6
+    const c = Math.round(player.c / stepC) * stepC
+    const r = Math.round(player.r / stepR) * stepR
+    return { c0: c - wc / 2, c1: c + wc / 2, r0: r - hr / 2, r1: r + hr / 2 }
   }
   const siteW = grid.cols * grid.cw
   const siteH = grid.rows * grid.ch
@@ -25,21 +34,48 @@ function mapView(grid, player, zoom) {
   return { c0: cc - w / grid.cw / 2, c1: cc + w / grid.cw / 2, r0: cr - h / grid.ch / 2, r1: cr + h / grid.ch / 2 }
 }
 
-function Heading({ text, y, width }) {
+/** You on the map window: an arrow in the direction you face, updated every frame without redrawing the map. */
+function PlayerMarker({ playerRef, view, z }) {
+  const ref = useRef(null)
+  const { arrow, outline, dot, ring } = useMemo(() => {
+    const tri = (len, half) => {
+      const shape = new THREE.Shape()
+      shape.moveTo(0, len)
+      shape.lineTo(-half, 0)
+      shape.lineTo(half, 0)
+      shape.closePath()
+      return new THREE.ShapeGeometry(shape)
+    }
+    return { arrow: tri(0.019, 0.0076), outline: tri(0.022, 0.0095), dot: new THREE.CircleGeometry(0.007, 20), ring: new THREE.CircleGeometry(0.0088, 20) }
+  }, [])
+  useEffect(() => () => [arrow, outline, dot, ring].forEach((g) => g.dispose()), [arrow, outline, dot, ring])
+  useFrame(() => {
+    const g = ref.current
+    const p = playerRef.current
+    if (!g || !p) return
+    const u = (p.c - view.c0) / (view.c1 - view.c0)
+    const v = (p.r - view.r0) / (view.r1 - view.r0)
+    g.visible = u >= 0 && u <= 1 && v >= 0 && v <= 1
+    g.position.set((u - 0.5) * MAP_BOX[0], (0.5 - v) * MAP_BOX[1], z)
+    g.rotation.z = -(p.heading ?? 0)
+  })
+  // Transparent pass with a higher render order: drawn after (on top of) the map image, which is transparent too.
+  const flat = { toneMapped: false, fog: false, depthTest: false, transparent: true }
   return (
-    <CanvasPanel
-      width={width}
-      height={0.035}
-      px={Math.round(width * 1800)}
-      draw={(ctx, w, h) => {
-        ctx.fillStyle = '#9a9a9a'
-        ctx.font = `600 ${Math.round(h * 0.6)}px ${FONT}`
-        ctx.textBaseline = 'middle'
-        ctx.fillText(text.toUpperCase(), 6, h / 2)
-      }}
-      drawKey={text}
-      position={[0, y, 0.001]}
-    />
+    <group ref={ref} renderOrder={2} raycast={() => {}}>
+      <mesh geometry={outline} position={[0, -0.0015, 0]} renderOrder={2} raycast={() => {}}>
+        <meshBasicMaterial color="#000000" {...flat} />
+      </mesh>
+      <mesh geometry={arrow} renderOrder={3} raycast={() => {}}>
+        <meshBasicMaterial color="#5ad1ff" {...flat} />
+      </mesh>
+      <mesh geometry={ring} renderOrder={4} raycast={() => {}}>
+        <meshBasicMaterial color="#000000" {...flat} />
+      </mesh>
+      <mesh geometry={dot} renderOrder={5} raycast={() => {}}>
+        <meshBasicMaterial color="#ffffff" {...flat} />
+      </mesh>
+    </group>
   )
 }
 
@@ -54,7 +90,7 @@ export function MapWindow({
   planning,
   showHazards,
   player,
-  tick,
+  playerRef,
   message,
   resetKey,
   onMapPoint,
@@ -73,11 +109,12 @@ export function MapWindow({
       img.onload = null
     }
   }, [textureUrl])
-  const hazard = useMemo(() => hazardCanvas(grid), [grid])
+  const hazard = useMemo(() => grid.hazardCanvas(), [grid])
 
   const view = mapView(grid, player, zoom)
+  const viewKey = [view.r0, view.c0, view.r1, view.c1].map((v) => v.toFixed(2)).join(',')
   const top = 0.42 // window is laid out downward from here
-  const mapY = top - 0.05 - 0.01 - MAP_BOX[1] / 2
+  const mapY = top - TITLE_H - 0.01 - MAP_BOX[1] / 2
   const rowY = mapY - MAP_BOX[1] / 2 - 0.04
   const statusY = rowY - 0.058
   const height = top - (statusY - 0.035) // total window height
@@ -88,7 +125,7 @@ export function MapWindow({
       ? draft.length < 2
         ? `Tap the map to place point ${draft.length + 1}.`
         : `${draft.length} points. Add more, or press Create route.`
-      : 'Tap the map to go there. Pinch a title bar to move a window.')
+      : '') // the map itself already says "Tap the map to go there"
 
   const buttons = planning
     ? [
@@ -112,7 +149,7 @@ export function MapWindow({
           height={MAP_BOX[1]}
           px={1100}
           draw={(ctx, w, h) =>
-            drawMap(ctx, w, h, {
+            new PanelPainter(ctx, w, h).map({
               image,
               hazard: showHazards ? hazard : null,
               grid,
@@ -121,11 +158,12 @@ export function MapWindow({
               selectedId,
               stations: grid.stations,
               draft,
-              player,
+              player: null, // drawn by PlayerMarker
               planning,
             })
           }
-          drawKey={`${tick}|${image?.src}|${zoom}|${selectedId}|${draft.length}|${planning}|${showHazards}|${routes.length}|${grid.id}`}
+          drawKey={`${viewKey}|${image?.src}|${selectedId}|${draft.map((p) => p.join()).join(';')}|${planning}|${showHazards}|${routes.map((r) => r.id).join()}|${grid.id}`}
+          dynamic
           position={[0, mapY, 0.001]}
           onClick={(e) => {
             if (isDrag(e) || !e.uv) return
@@ -133,6 +171,9 @@ export function MapWindow({
             onMapPoint([view.r0 + (1 - e.uv.y) * (view.r1 - view.r0), view.c0 + e.uv.x * (view.c1 - view.c0)])
           }}
         />
+        <group position={[0, mapY, 0]}>
+          <PlayerMarker playerRef={playerRef} view={view} z={0.003} />
+        </group>
         <group position={[0, rowY, 0]}>
           <VRButton label="Whole site" width={0.14} height={0.045} active={zoom === 'site'} onClick={() => setZoom('site')} position={[-0.28, 0, 0.001]} />
           <VRButton label="Around me" width={0.14} height={0.045} active={zoom === 'near'} onClick={() => setZoom('near')} position={[-0.13, 0, 0.001]} />
@@ -144,13 +185,28 @@ export function MapWindow({
           width={MAP_BOX[0]}
           height={0.05}
           px={1400}
-          draw={(ctx, w, h) => drawStatus(ctx, w, h, status, Boolean(message))}
+          draw={(ctx, w, h) => new PanelPainter(ctx, w, h).status(status, Boolean(message))}
           drawKey={`${status}|${Boolean(message)}`}
           position={[0, statusY, 0.001]}
         />
       </group>
     </DraggableWindow>
   )
+}
+
+/** What the EVA readout shows, rounded as it is displayed: it is redrawn only when this changes. */
+function evaKey(eva, selectedId) {
+  return [
+    selectedId,
+    Math.round(eva.walked),
+    Math.round(eva.length),
+    Math.floor(eva.simSeconds),
+    eva.playing,
+    eva.speed,
+    eva.elevation == null ? '' : Math.round(eva.elevation),
+    eva.slope,
+    eva.nextStop ? `${eva.nextStop.name}${Math.round(eva.nextStop.in)}` : '',
+  ].join('|')
 }
 
 /** Sites, routes, walking controls and the live EVA readout. */
@@ -162,7 +218,6 @@ export function MissionPanel({
   selectedId,
   onSelectRoute,
   walk,
-  tick,
   eva,
   showHazards,
   onToggleHazards,
@@ -184,12 +239,11 @@ export function MissionPanel({
 
   // Lay out rows top to bottom (y relative to the window's top edge).
   const rows = []
-  let y = -0.05 - 0.01
+  let y = -TITLE_H - 0.01
   const add = (h, render) => {
     rows.push(render(y - h / 2))
     y -= h + gap
   }
-  add(0.035, (cy) => <Heading key="h-site" text="Landing site" y={cy} width={inner} />)
   for (let i = 0; i < sites.length; i += 2) {
     add(bh, (cy) => (
       <ButtonRow
@@ -207,7 +261,7 @@ export function MissionPanel({
       />
     ))
   }
-  add(0.035, (cy) => <Heading key="h-routes" text="Routes" y={cy} width={inner} />)
+  y -= 0.02 // a little space between the sites and the routes
   for (const r of routes) {
     add(bh, (cy) => (
       <VRButton
@@ -223,7 +277,7 @@ export function MissionPanel({
     ))
   }
   if (selectedId) {
-    add(0.035, (cy) => <Heading key="h-walk" text="Walk this route" y={cy} width={inner} />)
+    y -= 0.02
     add(bh, (cy) => (
       <ButtonRow
         key="walk1"
@@ -254,8 +308,9 @@ export function MissionPanel({
       width={inner}
       height={evaH}
       px={1000}
-      draw={(ctx, w, h) => drawEVA(ctx, w, h, eva)}
-      drawKey={`${tick}|${selectedId}|${walk.playing}|${walk.speed}`}
+      draw={(ctx, w, h) => new PanelPainter(ctx, w, h).eva(eva)}
+      drawKey={evaKey(eva, selectedId)}
+      dynamic
       position={[0, cy, 0.001]}
     />
   ))

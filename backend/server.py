@@ -17,16 +17,20 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so MarsOllama imports from any folder
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so 'backend' imports from any folder
 
-import MarsOllama as agent  # noqa: E402
+from backend.martial import AgentError, MartialAgent  # noqa: E402
 
 HOST = os.environ.get("MPS_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MPS_PORT", "8000"))
 MAX_BODY = 5_000_000  # bytes: routes carry their cell lists
 
 
-class Handler(BaseHTTPRequestHandler):
+class AgentRequestHandler(BaseHTTPRequestHandler):
+    """Answers /api requests with the server's MartialAgent."""
+
+    agent: MartialAgent  # set by MartialServer
+
     def _send(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -42,7 +46,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         if self.path.rstrip("/") == "/api/health":
-            self._send(200, agent.ollama_status())
+            self._send(200, self.agent.status())
         else:
             self._send(404, {"error": "Not found"})
 
@@ -56,9 +60,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             body = json.loads(self.rfile.read(length))
-            result = agent.ask(body.get("site", ""), body.get("message", ""), body.get("routes") or [])
+            result = self.agent.ask(body.get("site", ""), body.get("message", ""), body.get("routes") or [])
             self._send(200, result)
-        except agent.AgentError as e:
+        except AgentError as e:
             self._send(200, {"skill": None, "source": "map", "reply": str(e)})
         except (ValueError, KeyError) as e:
             self._send(400, {"error": str(e)})
@@ -70,18 +74,37 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[martial] {self.address_string()} {fmt % args}\n")
 
 
+class MartialServer:
+    """The HTTP server for the website, with one shared agent."""
+
+    def __init__(self, agent=None, host=HOST, port=PORT):
+        self.agent = agent or MartialAgent()
+        self.host = host
+        self.port = port
+
+    def check_model(self):
+        """Warns when Martial will have to answer from map data only."""
+        status = self.agent.status()
+        model = self.agent.model
+        if not status["ollama"]:
+            print(f"! Ollama is not reachable ({status.get('error')}). Martial will answer from map data only.")
+        elif not status["model_installed"]:
+            print(f"! Model '{model}' is not installed. Run: ollama pull {model}")
+
+    def serve(self):
+        handler = type("Handler", (AgentRequestHandler,), {"agent": self.agent})
+        server = ThreadingHTTPServer((self.host, self.port), handler)
+        print(f"Martial back end on http://{self.host}:{self.port}  (model: {self.agent.model})", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
+
 def main():
-    status = agent.ollama_status()
-    if not status["ollama"]:
-        print(f"! Ollama is not reachable ({status.get('error')}). Martial will answer from map data only.")
-    elif not status["model_installed"]:
-        print(f"! Model '{agent.MODEL}' is not installed. Run: ollama pull {agent.MODEL}")
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Martial back end on http://{HOST}:{PORT}  (model: {agent.MODEL})", flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
+    server = MartialServer()
+    server.check_model()
+    server.serve()
 
 
 if __name__ == "__main__":

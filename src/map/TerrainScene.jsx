@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
-import { buildTerrain, makeProjection } from './terrainMesh.js'
+import TerrainProjection from '../three/TerrainProjection.js'
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
@@ -51,21 +51,24 @@ export default function TerrainScene({
   selectedId,
   stations,
   draft,
+  draftLabels,
+  probe,
   drawing,
   onRouteClick,
   onTerrainClick,
+  onGroundClick,
   onEmptyClick,
   onReady,
 }) {
   const mountRef = useRef(null)
   const ctxRef = useRef(null)
   const handlers = useRef({})
-  handlers.current = { onRouteClick, onTerrainClick, onEmptyClick, drawing }
+  handlers.current = { onRouteClick, onTerrainClick, onGroundClick, onEmptyClick, drawing }
 
   // --- scene setup (once per site) ---------------------------------------
   useEffect(() => {
     const mount = mountRef.current
-    const proj = makeProjection(grid)
+    const proj = new TerrainProjection(grid)
     const { span } = proj
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -99,13 +102,14 @@ export default function TerrainScene({
     const texture = new THREE.TextureLoader().load(textureUrl, () => onReady?.())
     texture.colorSpace = THREE.SRGBColorSpace
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
-    const terrain = buildTerrain(grid, proj, texture)
+    const terrain = proj.buildMesh(texture)
     scene.add(terrain)
 
     const routeGroup = new THREE.Group()
     const stationGroup = new THREE.Group()
     const draftGroup = new THREE.Group()
-    scene.add(routeGroup, stationGroup, draftGroup)
+    const probeGroup = new THREE.Group()
+    scene.add(routeGroup, stationGroup, draftGroup, probeGroup)
 
     // Intro: drop from straight overhead to an angled view centred on the stations.
     const focus = new THREE.Vector3()
@@ -141,6 +145,7 @@ export default function TerrainScene({
       const hit = pick(e)
       if (h.drawing && hit.ground) h.onTerrainClick?.(hit.ground)
       else if (hit.routeId) h.onRouteClick?.(hit.routeId)
+      else if (hit.ground) h.onGroundClick?.(hit.ground)
       else h.onEmptyClick?.()
     }
     const onMove = (e) => {
@@ -182,13 +187,13 @@ export default function TerrainScene({
     }
     animate()
 
-    ctxRef.current = { proj, routeGroup, stationGroup, draftGroup }
+    ctxRef.current = { proj, routeGroup, stationGroup, draftGroup, probeGroup }
 
     return () => {
       cancelAnimationFrame(frame)
       resize.disconnect()
       controls.dispose()
-      for (const g of [routeGroup, stationGroup, draftGroup]) disposeGroup(g)
+      for (const g of [routeGroup, stationGroup, draftGroup, probeGroup]) disposeGroup(g)
       terrain.geometry.dispose()
       terrain.material.dispose()
       texture.dispose()
@@ -267,7 +272,7 @@ export default function TerrainScene({
     points.forEach((p, k) => {
       const dot = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 12), new THREE.MeshBasicMaterial({ color: 0x5ad1ff }))
       dot.position.copy(p)
-      const tag = label(String(k + 1), 'scene-label scene-label-draft')
+      const tag = label(draftLabels?.[k] ?? String(k + 1), 'scene-label scene-label-draft')
       tag.position.copy(p).add(new THREE.Vector3(0, size * 2.5, 0))
       draftGroup.add(dot, tag)
     })
@@ -279,7 +284,23 @@ export default function TerrainScene({
       line.computeLineDistances()
       draftGroup.add(line)
     }
-  }, [grid, draft])
+  }, [grid, draft, draftLabels])
+
+  // --- the point you clicked (its coordinates are shown by SiteView) --------
+  useEffect(() => {
+    const ctx = ctxRef.current
+    if (!ctx) return
+    const { proj, probeGroup } = ctx
+    disposeGroup(probeGroup)
+    if (!probe) return
+    const size = proj.span * 0.003
+    const ground = proj.toWorld(probe[0], probe[1])
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.15, size * 0.15, size * 5, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }))
+    pin.position.copy(ground).add(new THREE.Vector3(0, size * 2.5, 0))
+    const head = new THREE.Mesh(new THREE.SphereGeometry(size * 0.9, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff4f8b }))
+    head.position.copy(ground).add(new THREE.Vector3(0, size * 5.3, 0))
+    probeGroup.add(pin, head)
+  }, [grid, probe])
 
   return <div ref={mountRef} className="terrain-scene" />
 }

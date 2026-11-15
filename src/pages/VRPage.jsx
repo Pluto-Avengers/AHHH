@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { XR, createXRStore } from '@react-three/xr'
-import { SITES } from '../map/sites.js'
-import { loadSite } from '../map/loadSite.js'
-import { builtInRoutes, customRoute } from '../map/routes.js'
-import { makeSurface, makeWalkPath } from '../vr/surface.js'
+import { SITES } from '../data/sites.js'
+import { siteLoader } from '../core/SiteLoader.js'
+import RoutePlanner from '../core/RoutePlanner.js'
+import Coordinates from '../core/Coordinates.js'
+import VRSurface from '../vr/VRSurface.js'
+import WalkPath from '../vr/WalkPath.js'
 import { MarsSurface, PlayerRig, SessionWatcher, Walker } from '../vr/MarsWorld.jsx'
 import { MapWindow, MissionPanel } from '../vr/Windows.jsx'
 import '../vr/vr.css'
 
 // One XR session for the page. Hands (and controllers, if they work) get laser pointers:
 // a pinch fires the same onClick a mouse click does, so every action works by hand.
-const store = createXRStore({ emulate: false })
+// foveation 1: the headset renders the edges of your view at lower resolution (much less GPU work).
+const store = createXRStore({ emulate: false, foveation: 1 })
 
 const SPEEDS = [1, 3, 10] // walking speed multipliers (1× = real suited walking pace)
 
@@ -58,7 +61,7 @@ export default function VRPage() {
 
   useEffect(() => {
     let cancelled = false
-    loadSite(siteId)
+    siteLoader.load(siteId)
       .then((d) => {
         if (cancelled) return
         playerRef.current = startPose(d.grid) // before the rig mounts for this site
@@ -75,12 +78,12 @@ export default function VRPage() {
   const current = loaded?.id === siteId ? loaded : null
   const data = current?.data
   const grid = data?.grid
-  const surface = useMemo(() => (grid ? makeSurface(grid) : null), [grid])
+  const surface = useMemo(() => (grid ? new VRSurface(grid) : null), [grid])
   const mine = useMemo(() => customRoutes[siteId] ?? [], [customRoutes, siteId])
-  const builtIn = useMemo(() => (grid ? builtInRoutes(grid) : []), [grid])
+  const builtIn = useMemo(() => (grid ? new RoutePlanner(grid).builtInRoutes() : []), [grid])
   const routes = useMemo(() => [...builtIn, ...mine], [builtIn, mine])
   const paths = useMemo(
-    () => (surface ? Object.fromEntries(routes.map((r) => [r.id, makeWalkPath(grid, surface, r)])) : {}),
+    () => (surface ? Object.fromEntries(routes.map((r) => [r.id, new WalkPath(grid, surface, r)])) : {}),
     [grid, surface, routes],
   )
   const selected = routes.find((r) => r.id === selectedId)
@@ -100,14 +103,19 @@ export default function VRPage() {
     playerRef.current.r = at.r
     playerRef.current.c = at.c
   }
-  const moveTo = ([r, c]) => {
-    if (!surface.hasData(r, c)) return setMessage('No terrain data there. Pick a spot inside the mapped area.')
-    playerRef.current.r = r
-    playerRef.current.c = c
-    walkRef.current.playing = false
-    walkRef.current.onRoute = false
-    setMessage(null)
-  }
+  // Stable, so the ground (a memoised component) doesn't re-render when the readout refreshes.
+  const moveTo = useCallback(
+    ([r, c]) => {
+      if (!surface.hasData(r, c)) return setMessage('No terrain data there. Pick a spot inside the mapped area.')
+      playerRef.current.r = r
+      playerRef.current.c = c
+      walkRef.current.playing = false
+      walkRef.current.onRoute = false
+      const [lat, lon] = grid.latLonAt(r, c)
+      setMessage(`Moved to ${Coordinates.point(lat, lon)}.`)
+    },
+    [surface, grid],
+  )
 
   // ---- routes ------------------------------------------------------------------
   const selectRoute = (id) => {
@@ -168,7 +176,7 @@ export default function VRPage() {
     setMessage(null)
   }
   const createRoute = () => {
-    const { route, error } = customRoute(grid, draft, mine.length + 1)
+    const { route, error } = new RoutePlanner(grid).customRoute(draft, mine.length + 1)
     if (error) return setMessage(error)
     const next = [...mine, route]
     setCustomRoutes((all) => ({ ...all, [siteId]: next }))
@@ -179,7 +187,7 @@ export default function VRPage() {
     walkRef.current = {
       ...walkRef.current,
       routeId: route.id,
-      path: makeWalkPath(grid, surface, route),
+      path: new WalkPath(grid, surface, route),
       s: 0,
       sim: 0,
       playing: false,
@@ -228,7 +236,6 @@ export default function VRPage() {
     slope: surface ? surface.slopeAt(player.r, player.c) : null,
     nextStop,
   }
-  const tick = snap ? `${player.r.toFixed(1)},${player.c.toFixed(1)},${(player.heading ?? 0).toFixed(1)},${walk.s.toFixed(0)}` : '0'
 
   return (
     <div className="vr-page">
@@ -260,7 +267,7 @@ export default function VRPage() {
                   planning={planning}
                   showHazards={showHazards}
                   player={player}
-                  tick={tick}
+                  playerRef={playerRef}
                   message={message}
                   resetKey={`${resetKey}|${grid.id}`}
                   onMapPoint={onMapPoint}
@@ -277,7 +284,6 @@ export default function VRPage() {
                   selectedId={selectedId}
                   onSelectRoute={selectRoute}
                   walk={walk}
-                  tick={tick}
                   eva={eva}
                   showHazards={showHazards}
                   onToggleHazards={() => setShowHazards((v) => !v)}
@@ -301,10 +307,7 @@ export default function VRPage() {
 
       <section className="vr-intro">
         <h1>Walk on Mars</h1>
-        <p className="muted">
-          Stand on the landing site at real scale, walk the planned route as an astronaut, or plan your own on the map
-          window. Works with hands only: pinch to press.
-        </p>
+        <p>Stand on the landing site at real scale and walk a route. Hands only: pinch to press.</p>
         <button
           type="button"
           className="button"
@@ -313,12 +316,12 @@ export default function VRPage() {
         >
           Enter VR
         </button>
-        <p className="vr-support muted">
-          {support === 'yes' && 'Headset ready. Put it on after pressing Enter VR.'}
-          {support === 'checking' && 'Checking for a VR headset…'}
-          {support === 'no' && 'No VR headset in this browser. Open this page in the Meta Quest Browser to enter VR. Preview here: drag to look around, click to press.'}
-          {support === 'insecure' && 'VR needs a secure page: use npm run quest (https) or http://localhost.'}
-        </p>
+        {support === 'no' && (
+          <p className="vr-support muted">Open this page in the Meta Quest Browser to enter VR.</p>
+        )}
+        {support === 'insecure' && (
+          <p className="vr-support muted">VR needs a secure page: use npm run quest (https) or http://localhost.</p>
+        )}
       </section>
     </div>
   )

@@ -20,37 +20,63 @@ python -m backend.server        # http://127.0.0.1:8000; the dev server forwards
 
 ## Martial, the navigation agent
 
-Open a landing site on the map and press **Ask Martial**. `MarsOllama.py` holds the agent: a router and two
-skills, each with its own instructions.
+Open a landing site on the map and press **Ask Martial**. The agent lives in `backend/martial/`: a router and two
+skills, each a class with its own instructions (`prompts.py`).
 
 | Skill | Ask for | Martial does |
 | --- | --- | --- |
 | Navigation procedure | directions between two coordinates, or "landing site" / "stop N" | plans the safest path on the terrain map, cuts it into legs and writes a formal step-by-step procedure; the route appears on the map |
 | Route preference | a kind of route: fastest, longest, rockiest, least rocky, highest or lowest point | compares the routes on the map plus safest and most direct paths to each science stop, and highlights the best match |
 
+Routes also consider radiation. Cosmic rays reach the surface from the open sky, so `scripts/export_sites.py` works
+out how much of the sky each spot sees (`public/sites/<id>/sky.bin`), and the route planner (the website and Martial
+alike) prefers ground where hills and crater walls block part of it. Each route's estimated dose is its walking time
+× 0.21 mGy a day (Curiosity's measurement at Gale) × the share of open sky.
+
 All numbers (coordinates, headings, distances, elevations, slopes, roughness) come from the same site terrain the
-map draws (`public/sites/`), read by `backend/mars_map.py`. A navigation procedure is accepted from the model only
+map draws (`public/sites/`), read by `backend/terrain/`. A navigation procedure is accepted from the model only
 when its steps match the map exactly; otherwise, or when Ollama isn't running, Martial writes it straight from the
 map data. Settings: `MARTIAL_MODEL` (default `llama3.2`), `OLLAMA_HOST`, `MPS_PORT` (default `8000`).
 Try it without the website: `python MarsOllama.py jezero "Find me the least rocky route"`.
 
 ## Structure
 
+The logic is in classes, grouped by what it does. React components stay function components with hooks
+(React's recommended style) and call into these classes.
+
 ```
 src/
-  App.jsx                 routes (/, /map, /vr, /credits)
-  components/Navbar.jsx   top navigation (collapses to a menu on mobile)
-  components/MarsGlobe.jsx  rotating three.js Mars globe (home hero)
-  lib/marsTexture.js      procedural Mars surface texture
-  pages/Home.jsx          hero + "Explore Mars" button
-  pages/MapPage.jsx       (empty) route map
-  pages/VRPage.jsx        (empty) VR experience
-  pages/Credits.jsx       team cards: edit the `team` array
-  map/MartialChat.jsx     chat panel for the Martial agent
-MarsOllama.py             the agent: router + skill instructions (Ollama)
-backend/mars_map.py       site terrain, routing and route measurements for the agent
-backend/server.py         HTTP API the website calls (/api/agent, /api/health)
-public/martial/           Martial's avatar (tongue out at rest, in while speaking)
+  App.jsx                    routes (/, /map, /vr, /credits)
+  pages/                     Home, MapPage, VRPage, Credits
+  components/                Navbar, MarsGlobe (home hero), SiteFooter, TraverseFigure, Wave
+  data/sites.js              the landing sites and their rover data
+  core/                      plain JavaScript, no React or three.js
+    TerrainGrid.js           a site's terrain: A* routing, route stats, hazard overlay
+    MinHeap.js               priority queue for A*
+    RoutePlanner.js          builds route objects (recommended, rover drive, custom, Martial's)
+    SiteLoader.js            downloads and caches each site's terrain
+  three/                     three.js helpers
+    TerrainProjection.js     grid <-> scene coordinates, terrain mesh
+    ThumbnailRenderer.js     3D miniatures for the world-map markers
+    MarsTexture.js           procedural Mars texture (globe fallback)
+  map/                       the Map page: world map, site view (3D / 2D), route details
+    martial/                 Martial's chat: MartialChat, MartialReply, ReplyParser,
+                             MartialClient (API calls), MartialVoice (bark)
+  vr/                        the VR page: MarsWorld, Windows, ui, VRSurface, WalkPath,
+                             GroundDetail, PanelPainter (draws the VR panels)
+backend/
+  server.py                  MartialServer: HTTP API the website calls (/api/agent, /api/health)
+  martial/                   the agent
+    agent.py                 MartialAgent: reads a request, routes it to a skill
+    router.py                SkillRouter
+    skills/                  NavigationSkill, RoutePreferenceSkill (one Skill class each)
+    prompts.py               the router's and each skill's instructions for the model
+    request.py               RequestReader: coordinates, stations and off-map destinations in a request
+    llm.py                   OllamaClient
+  terrain/                   TerrainGrid (routing), LegPlanner, RouteCandidates, SiteCatalog, Coordinates
+MarsOllama.py                command-line entry point for the agent
+scripts/                     SiteExporter (export_sites.py), GlobeTextureExporter
+public/martial/              Martial's avatar (tongue out at rest, in while speaking)
 ```
 
 Colors and spacing live as CSS variables at the top of `src/index.css`.

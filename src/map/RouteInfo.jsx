@@ -1,10 +1,4 @@
-import { riskLevel, MAX_SLOPE } from './router.js'
-
-const KIND_LABEL = {
-  recommended: 'Recommended route',
-  custom: 'Your route',
-  reference: 'Rover drive (for reference)',
-}
+import RoutePlanner from '../core/RoutePlanner.js'
 
 const formatTime = (minutes) => {
   const m = Math.round(minutes)
@@ -25,12 +19,7 @@ function Profile({ profile }) {
 
   return (
     <figure className="profile">
-      <figcaption>
-        Elevation profile{' '}
-        <span className="muted">
-          ({Math.round(lo)} to {Math.round(hi)} m)
-        </span>
-      </figcaption>
+      <figcaption>Elevation</figcaption>
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label="Elevation along the route">
         <polygon points={`0,${h} ${line.join(' ')} ${w},${h}`} className="profile-fill" />
         <polyline points={line.join(' ')} className="profile-line" />
@@ -45,18 +34,15 @@ function Profile({ profile }) {
 
 export default function RouteInfo({ route, onClose, onDelete }) {
   const { stats } = route
-  const risk = riskLevel(stats)
+  const risk = RoutePlanner.riskLevel(stats)
 
   return (
     <aside className="route-info" aria-label="Route details">
       <header>
-        <div>
-          <p className="route-kind">
-            <span className="swatch" style={{ background: route.color }} />
-            {route.agent ? 'Planned by Martial' : KIND_LABEL[route.kind]}
-          </p>
-          <h2>{route.name}</h2>
-        </div>
+        <h2 className="route-title">
+          <span className="swatch" style={{ background: route.color }} />
+          {route.name}
+        </h2>
         <button type="button" className="icon-button" onClick={onClose} aria-label="Close route details">
           ✕
         </button>
@@ -87,6 +73,14 @@ export default function RouteInfo({ route, onClose, onDelete }) {
           <dt>Average slope</dt>
           <dd>{stats.meanSlope.toFixed(1)}°</dd>
         </div>
+        <div title="Cosmic-radiation dose for the walk: time on the route × 0.21 mGy a day (Curiosity's measurement at Gale), lower where hills or crater walls block part of the sky">
+          <dt>Radiation dose</dt>
+          <dd>{stats.doseUGy.toFixed(1)} µGy</dd>
+        </div>
+        <div title="Average share of the sky open above the route. Terrain that blocks the sky also blocks part of the cosmic radiation.">
+          <dt>Open sky</dt>
+          <dd>{Math.round(stats.meanSkyView * 100)}%</dd>
+        </div>
         <div>
           <dt>Terrain risk</dt>
           <dd className={`risk risk-${risk.label.toLowerCase()}`}>{risk.label}</dd>
@@ -109,11 +103,6 @@ export default function RouteInfo({ route, onClose, onDelete }) {
           </ol>
         </>
       )}
-
-      <p className="route-note muted">
-        Walking time assumes a suited astronaut and slows on grades. Slopes over {MAX_SLOPE}° are treated as
-        impassable. Terrain is HiRISE elevation resampled to about {route.cellM} m.
-      </p>
 
       {onDelete && (
         <button type="button" className="text-button" onClick={onDelete}>

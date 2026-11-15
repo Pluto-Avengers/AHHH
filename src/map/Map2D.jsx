@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { hazardCanvas } from './hazards.js'
 
 // Top-down site map for tablets. World units are meters, origin at the north-west cell centre,
 // x east, y south (so north is up). Grid point (row, col) sits at (col * cw, row * ch).
@@ -39,10 +38,13 @@ export default function Map2D({
   selectedId,
   stations,
   draft,
+  draftLabels,
+  probe,
   drawing,
   showHazards,
   onRouteClick,
   onTerrainClick,
+  onGroundClick,
   onEmptyClick,
   onReady,
 }) {
@@ -56,7 +58,7 @@ export default function Map2D({
 
   const worldW = grid.cols * grid.cw
   const worldH = grid.rows * grid.ch
-  const hazards = useMemo(() => hazardCanvas(grid).toDataURL(), [grid])
+  const hazards = useMemo(() => grid.hazardCanvas().toDataURL(), [grid])
 
   // --- view helpers ----------------------------------------------------
   // Screen space the side panels cover, so fitted content lands in the visible part of the map.
@@ -225,6 +227,8 @@ export default function Map2D({
     const wy = v.y + py * k
     if (drawing) onTerrainClick?.([wy / grid.ch, wx / grid.cw])
     else if (g.routeId) onRouteClick?.(g.routeId)
+    else if (wx >= -grid.cw / 2 && wy >= -grid.ch / 2 && wx <= worldW - grid.cw / 2 && wy <= worldH - grid.ch / 2)
+      onGroundClick?.([wy / grid.ch, wx / grid.cw])
     else onEmptyClick?.()
   }
 
@@ -317,14 +321,29 @@ export default function Map2D({
             className="map2d-draft-line"
           />
         )}
-        {draft.map(([r, c], i) => (
-          <g key={i} className="map2d-draft">
-            <circle cx={c * grid.cw} cy={r * grid.ch} r={12 * k} />
-            <text x={c * grid.cw} y={r * grid.ch + 5 * k} fontSize={14 * k}>
-              {i + 1}
-            </text>
+        {draft.map(([r, c], i) => {
+          const text = draftLabels?.[i] ?? String(i + 1)
+          const long = text.length > 2 // "Start" / "End": written beside the dot instead of in it
+          return (
+            <g key={i} className={`map2d-draft${long ? ' is-end' : ''}`}>
+              <circle cx={c * grid.cw} cy={r * grid.ch} r={(long ? 9 : 12) * k} />
+              <text
+                x={c * grid.cw + (long ? 14 * k : 0)}
+                y={r * grid.ch + 5 * k}
+                fontSize={14 * k}
+                textAnchor={long ? 'start' : 'middle'}
+                strokeWidth={long ? 4 * k : undefined}
+              >
+                {text}
+              </text>
+            </g>
+          )
+        })}
+        {probe && (
+          <g className="map2d-probe">
+            <circle cx={probe[1] * grid.cw} cy={probe[0] * grid.ch} r={8 * k} strokeWidth={3 * k} />
           </g>
-        ))}
+        )}
       </svg>
 
       <div className="map2d-controls">

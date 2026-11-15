@@ -1,5 +1,7 @@
 /* Map page only: everything is scoped under .map-page */
 .map-page {
+  --right-w: 360px; /* route details and Martial's chat, on the right */
+
   position: relative;
   height: calc(100vh - var(--nav-h));
   overflow: hidden;
@@ -166,8 +168,18 @@
 
 .site-marker-3d .site-marker-label {
   left: 50%;
-  top: 76px;
+  top: 61px;
   transform: translateX(-50%);
+}
+
+.site-marker-3d.label-above .site-marker-label {
+  top: -26px;
+}
+
+.site-marker-3d.label-right .site-marker-label {
+  left: 82px;
+  top: 22px;
+  transform: none;
 }
 
 .leaflet-tooltip.site-tooltip {
@@ -386,7 +398,7 @@
   z-index: 2;
   top: 16px;
   right: 16px;
-  width: 320px;
+  width: var(--right-w);
   max-height: calc(100% - 52px);
   overflow-y: auto;
   padding: 20px;
@@ -760,9 +772,10 @@
 }
 
 /* With route details open on the right, keep the map controls clear of the panel */
-.site-view.is-2d.has-overlay .map2d-controls,
-.site-view.is-2d.has-overlay .map2d-legend {
-  right: 352px;
+/* With route details or Martial open on the right, keep the map controls clear of them */
+.site-view.is-2d.has-right .map2d-controls,
+.site-view.is-2d.has-right .map2d-legend {
+  right: calc(var(--right-w) + 32px);
 }
 
 /* ---------- Touch devices: bigger targets ---------- */
@@ -801,8 +814,8 @@
 }
 
 @media (max-width: 760px) {
-  .site-view.is-2d.has-overlay .map2d-controls,
-  .site-view.is-2d.has-overlay .map2d-legend {
+  .site-view.is-2d.has-right .map2d-controls,
+  .site-view.is-2d.has-right .map2d-legend {
     right: 16px;
   }
 
@@ -813,14 +826,11 @@
 }
 
 /* ---------- Martial, the navigation agent ---------- */
+/* Martial's face: his own transparent cut-out, no circle behind it */
 .martial-face {
   position: relative;
   flex: none;
   display: inline-block;
-  overflow: hidden;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid var(--spice-light);
 }
 
 .martial-face img {
@@ -828,10 +838,38 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
-/* Tongue out by default; it goes in while Martial speaks. */
+/* While his reply types out he shakes a little */
+.martial-face.is-speaking {
+  animation: martial-shake 0.32s ease-in-out infinite;
+}
+
+@keyframes martial-shake {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  25% {
+    transform: rotate(-4deg) translateY(-1px);
+  }
+  50% {
+    transform: rotate(0deg) translateY(1px);
+  }
+  75% {
+    transform: rotate(4deg) translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .martial-face.is-speaking {
+    animation: none;
+  }
+}
+
+/* Mouth closed by default; it opens while Martial speaks. */
 .martial-face .martial-face-speaking,
 .martial-face.is-speaking .martial-face-idle {
   visibility: hidden;
@@ -841,15 +879,16 @@
   visibility: visible;
 }
 
+/* Martial starts as a pop button in the top-right corner */
 .martial-launcher {
   position: absolute;
   z-index: 3;
-  left: 332px;
-  bottom: 16px;
+  top: 16px;
+  right: 16px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 16px 6px 6px;
+  padding: 10px 20px 10px 20px;
   background: rgba(0, 0, 0, 0.88);
   border: 1px solid var(--line);
   border-radius: 40px;
@@ -862,30 +901,40 @@
   border-color: var(--spice-light);
 }
 
+/* Open, Martial's chat takes the right side (where route details also go) */
 .martial-chat {
   position: absolute;
   z-index: 3;
-  left: 332px;
-  bottom: 16px;
-  width: min(420px, calc(100% - 348px));
-  height: min(620px, calc(100% - 32px));
+  top: 16px;
+  right: 16px;
+  width: min(var(--right-w), calc(100% - 348px));
+  height: calc(100% - 32px);
   display: flex;
   flex-direction: column;
   background: rgba(0, 0, 0, 0.93);
   border: 1px solid var(--line);
 }
 
+/* Header: Martial centred at the top, name and status under him, close button in the corner */
 .martial-chat header {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 14px 52px 12px;
+  text-align: center;
   border-bottom: 1px solid var(--line);
 }
 
 .martial-chat header > div {
-  flex: 1;
   min-width: 0;
+}
+
+.martial-chat header .icon-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 .martial-chat h2 {
@@ -1013,14 +1062,16 @@
 
 @media (max-width: 760px) {
   .martial-launcher {
-    left: 16px;
-    top: 16px;
-    bottom: auto;
     padding: 4px;
   }
 
-  .martial-launcher span:last-child {
+  .martial-launcher > span:last-child {
     display: none;
+  }
+
+  /* The 2D zoom buttons sit under Martial's button on phones */
+  .map2d-controls {
+    top: 92px;
   }
 
   .martial-chat {
@@ -1037,4 +1088,971 @@
   .site-view:has(.draw-bar) .martial-launcher {
     display: none;
   }
+}
+
+/* =====================================================================================
+   Shape and feel, after Google Maps: floating rounded cards with soft shadows instead of
+   boxed borders, pill buttons and chips, round controls, bottom sheets on phones.
+   Kept last so it overrides the plainer rules above. No backdrop-filter: like CSS filters on
+   the tiles, it can leave ghost frames on some GPUs while the map animates.
+   ===================================================================================== */
+.map-page {
+  --card-bg: #15100c;
+  --card-raised: #211912;
+  --card-hover: #2a2017;
+  --card-line: rgba(255, 237, 220, 0.09);
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.45);
+  --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --accent: var(--spice-light);
+  --accent-soft: rgba(150, 73, 10, 0.28);
+  --radius-card: 20px;
+  --radius-inner: 12px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Cards */
+.map-panel,
+.route-info,
+.draw-bar,
+.martial-chat {
+  background: var(--card-bg);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+
+.map-panel {
+  padding: 22px 20px 18px;
+  animation: card-in 0.35s var(--ease-out);
+}
+
+.route-info {
+  padding: 20px;
+  animation: card-in-right 0.3s var(--ease-out);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes card-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+/* Thin scrollbars inside cards */
+.map-panel,
+.route-info,
+.martial-messages {
+  scrollbar-width: thin;
+  scrollbar-color: #4a3a2c transparent;
+}
+
+/* Buttons: pills */
+.map-page .button {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition:
+    background 0.15s,
+    transform 0.15s var(--ease-out),
+    box-shadow 0.15s;
+}
+
+.map-page .button:hover:not(:disabled) {
+  background: #b0580f;
+  box-shadow: 0 2px 8px rgba(150, 73, 10, 0.45);
+}
+
+.map-page .button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.map-page .button:disabled,
+.map-page .button:disabled:hover {
+  background: var(--card-hover);
+  color: var(--muted);
+}
+
+.map-page .text-button {
+  padding: 6px 12px;
+  margin-left: -12px;
+  border-radius: 999px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.map-page .text-button:hover:not(:disabled) {
+  background: var(--card-hover);
+}
+
+.draw-actions .text-button {
+  margin-left: 0;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card-raised);
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.icon-button:hover {
+  background: var(--card-hover);
+}
+
+/* Lists: rounded rows that light up, no rules between them */
+.site-list,
+.route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 16px -10px 0;
+  border-top: 0;
+}
+
+.site-list li,
+.route-list li {
+  border-bottom: 0;
+}
+
+.site-list button,
+.route-list button {
+  padding: 10px 12px;
+  border-radius: var(--radius-inner);
+  transition: background 0.15s;
+}
+
+.site-list button {
+  position: relative;
+  padding-left: 46px;
+}
+
+/* A map pin in front of each site, like a place result */
+.site-list button::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -12px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 6px var(--accent), inset 0 0 0 10px #ffd9b8;
+}
+
+.site-list button:hover,
+.route-list button:hover {
+  background: var(--card-hover);
+}
+
+.site-list button:hover span:first-child,
+.route-list button:hover .route-list-name,
+.route-list button.is-selected .route-list-name {
+  text-decoration: none;
+}
+
+.site-list button span:first-child {
+  font-weight: 600;
+}
+
+.route-list button.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(214, 120, 40, 0.45);
+}
+
+.route-list .muted {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--card-raised);
+  font-size: 12px;
+}
+
+.map-page .swatch {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+/* 3D / 2D switch: a segmented pill */
+.view-toggle {
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-raised);
+}
+
+.view-toggle button {
+  border-radius: 999px;
+  font-weight: 600;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.view-toggle button + button {
+  border-left: 0;
+}
+
+.view-toggle button[aria-pressed='true'] {
+  background: var(--text);
+  color: #15100c;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.hazard-toggle {
+  padding: 8px 12px;
+  margin-left: -12px;
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+
+.hazard-toggle:hover {
+  background: var(--card-hover);
+}
+
+/* Floating chips */
+.flying,
+.scene-hint {
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-bg);
+  box-shadow: var(--chip-shadow);
+}
+
+.flying {
+  padding: 10px 20px;
+  font-weight: 600;
+  animation: chip-in 0.3s var(--ease-out);
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+.scene-hint {
+  padding: 6px 14px;
+}
+
+/* Keep the hint clear of the route card on the right */
+.site-view.has-right .scene-hint {
+  right: calc(var(--right-w) + 32px);
+}
+
+.martial-intro p {
+  line-height: 1.5;
+}
+
+/* "All landing sites" back link: a chip */
+.site-panel > .text-button:first-child {
+  margin-left: 0;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card-raised);
+}
+
+/* Drawing bar: a card with an accent edge */
+.draw-bar {
+  padding: 16px 18px;
+  box-shadow:
+    var(--card-shadow),
+    inset 0 0 0 1.5px rgba(90, 209, 255, 0.55);
+}
+
+/* Route details */
+.route-info header {
+  align-items: flex-start;
+}
+
+/* Rover data in the site panel */
+.rover-card {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: var(--radius-inner);
+  background: var(--card-raised);
+}
+
+.rover-card h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 16px;
+}
+
+.rover-agency {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.rover-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.rover-stats div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.rover-stats dt {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.rover-stats dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.rover-collected {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d9cfc6;
+}
+
+.rover-collected li + li {
+  margin-top: 4px;
+}
+
+.rover-collected li::marker {
+  color: var(--accent);
+}
+
+.route-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 6px;
+  line-height: 1.25;
+}
+
+.route-stats {
+  gap: 8px;
+  background: none;
+  border: 0;
+}
+
+.route-stats div {
+  padding: 12px;
+  border-radius: var(--radius-inner);
+  background: var(--card-raised);
+}
+
+.route-stats dd {
+  font-weight: 600;
+}
+
+.profile svg {
+  border-bottom: 0;
+  border-radius: var(--radius-inner);
+  background: var(--card-raised);
+}
+
+.profile-line {
+  stroke: #ffb27a;
+  stroke-width: 2;
+}
+
+.profile-fill {
+  fill: rgba(255, 178, 122, 0.14);
+}
+
+.route-info .text-button {
+  margin-left: -12px;
+}
+
+/* Map controls: a rounded stack, and chips */
+.mars-leaflet .leaflet-bar,
+.map2d-controls {
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: var(--chip-shadow);
+}
+
+.mars-leaflet .leaflet-bar a,
+.map2d-controls button {
+  background: var(--card-bg);
+  border-color: var(--card-line);
+  transition: background 0.15s;
+}
+
+.mars-leaflet .leaflet-bar a {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+}
+
+.mars-leaflet .leaflet-bar a:hover,
+.map2d-controls button:hover {
+  background: var(--card-hover);
+}
+
+.map2d-controls button + button {
+  border-top: 1px solid var(--card-line);
+}
+
+.mars-leaflet .leaflet-control-attribution {
+  margin: 0 8px 6px 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.map2d-legend {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  box-shadow: var(--chip-shadow);
+}
+
+.map2d-key i {
+  border-radius: 4px;
+}
+
+/* Labels and tooltips: rounded chips */
+.site-marker-label {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(21, 16, 12, 0.92);
+  text-shadow: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s;
+}
+
+.site-marker-3d:hover .site-marker-label {
+  background: var(--accent);
+}
+
+.site-marker-dot {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.leaflet-tooltip.site-tooltip {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: var(--chip-shadow);
+}
+
+.scene-label {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(21, 16, 12, 0.88);
+}
+
+/* Martial */
+.martial-launcher {
+  background: var(--card-bg);
+  border: 0;
+  box-shadow: var(--chip-shadow);
+  font-weight: 600;
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.15s;
+}
+
+.martial-launcher:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--chip-shadow),
+    0 0 0 2px var(--accent);
+}
+
+.martial-chat {
+  overflow: hidden;
+  animation: card-in 0.3s var(--ease-out);
+}
+
+.martial-chat header,
+.martial-input {
+  border-color: var(--card-line);
+}
+
+.martial-suggestions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: var(--card-raised);
+  transition: background 0.15s;
+}
+
+.martial-suggestions button:hover {
+  background: var(--card-hover);
+}
+
+.martial-msg {
+  border: 0;
+  border-radius: 18px;
+}
+
+.martial-msg.from-martial {
+  border-bottom-left-radius: 6px;
+  background: var(--card-raised);
+}
+
+.martial-msg.from-user {
+  border-bottom-right-radius: 6px;
+  background: var(--accent);
+}
+
+.martial-msg.is-error {
+  box-shadow: inset 0 0 0 1px #8a2b20;
+}
+
+.martial-input textarea {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--card-raised);
+}
+
+.martial-input textarea:focus {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Phones: panels become bottom sheets with a handle */
+@media (max-width: 760px) {
+  .map-panel,
+  .route-info {
+    border-radius: 24px 24px 0 0;
+    padding-top: 28px;
+    animation: sheet-in 0.35s var(--ease-out);
+  }
+
+  .map-panel::before,
+  .route-info::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: #4a3a2c;
+  }
+
+  .route-info {
+    background: var(--card-bg);
+  }
+
+  .martial-chat {
+    border-radius: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-panel,
+  .route-info,
+  .flying,
+  .martial-chat {
+    animation: none;
+  }
+}
+
+/* =====================================================================================
+   The right side: Martial's chat and the route details take turns. The one in use is
+   expanded; the other shrinks to a chip in the bottom-right corner. Click a chip to swap.
+   ===================================================================================== */
+.martial-launcher.is-minimized,
+.site-view.launcher-in-corner .martial-launcher,
+.route-chip {
+  top: auto;
+  bottom: 16px;
+  right: 16px;
+  animation: shrink-to-corner 0.35s var(--ease-out);
+  transform-origin: bottom right;
+}
+
+@keyframes shrink-to-corner {
+  from {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+/* Leave room above the chip for whichever panel is expanded */
+.site-view.has-corner .martial-chat {
+  height: calc(100% - 108px);
+}
+
+.site-view.has-corner .route-info {
+  max-height: calc(100% - 108px);
+}
+
+.martial-launcher > span:last-child,
+.route-chip > span:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.martial-launcher small,
+.route-chip small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.route-chip {
+  position: absolute;
+  z-index: 3;
+  max-width: var(--right-w);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 20px 8px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-bg);
+  box-shadow: var(--chip-shadow);
+  color: var(--text);
+  font-weight: 600;
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.15s;
+}
+
+.route-chip:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--chip-shadow),
+    0 0 0 2px var(--accent);
+}
+
+.route-chip > span:last-child {
+  min-width: 0;
+}
+
+.route-chip > span:last-child,
+.route-chip small {
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Phones: panels fill the screen, so the chips wait in the top-right corner instead */
+@media (max-width: 760px) {
+  .martial-launcher.is-minimized,
+  .site-view.launcher-in-corner .martial-launcher,
+  .route-chip {
+    top: 16px;
+    bottom: auto;
+    transform-origin: top right;
+  }
+
+  .route-chip {
+    max-width: calc(100% - 32px);
+  }
+
+  .martial-launcher > span:last-child {
+    display: none;
+  }
+
+  .site-view.has-corner .martial-chat {
+    height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .martial-launcher.is-minimized,
+  .site-view.launcher-in-corner .martial-launcher,
+  .route-chip {
+    animation: none;
+  }
+}
+
+/* Martial's replies: each idea in its own space */
+.martial-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.martial-reply > * {
+  margin: 0;
+}
+
+.reply-title {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.reply-heading {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* "Navigation Sequence" straight before "Initial Departure": one divider, not two */
+.reply-heading + .reply-heading {
+  margin-top: -4px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.reply-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.reply-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reply-value {
+  font-weight: 600;
+}
+
+.reply-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.reply-steps li::marker {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reply-text {
+  color: var(--text);
+}
+
+/* The point you clicked on the site: its coordinates and what's there */
+.point-card {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 10px 12px 10px 16px;
+  background: var(--card-bg);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+  animation: point-in 0.2s var(--ease-out);
+}
+
+@keyframes point-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+.point-coords {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.point-coords strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.point-facts {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.map2d-probe circle {
+  fill: #ff4f8b;
+  stroke: #fff;
+  vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 760px) {
+  .point-card {
+    top: 8px;
+  }
+
+  .point-coords strong {
+    white-space: normal;
+  }
+}
+
+/* World map: coordinates of the point you clicked */
+.coords-popup .leaflet-popup-content {
+  margin: 10px 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Coordinate search (world map panel and site panel) */
+.coord-search {
+  margin: 0 0 18px;
+}
+
+.coord-search label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.coord-search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.coord-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-raised);
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.coord-search input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.coord-search-result {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.coord-search-result.is-error {
+  color: #ffb27a;
+}
+
+.coord-open {
+  margin: -8px 0 18px;
+}
+
+.found-pin span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ff4f8b;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.coords-tip {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Route planning: what each click places */
+.map2d-draft.is-end text {
+  text-anchor: start;
+}
+
+.draw-roles {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--card-raised);
+}
+
+.draw-role {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.draw-role.is-set {
+  color: var(--text);
+}
+
+.draw-role.is-set::before {
+  content: '✓ ';
+  color: #5ad1ff;
+}
+
+.draw-role[aria-checked='true'] {
+  background: #5ad1ff;
+  color: #04121a;
+}
+
+.draw-role[aria-checked='true']::before {
+  color: inherit;
+}
+
+.point-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.point-actions .button {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.site-panel .coord-search {
+  margin: 16px 0 18px;
 }

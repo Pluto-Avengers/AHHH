@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { XROrigin, useXR } from '@react-three/xr'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { buildTerrain, makeProjection } from '../map/terrainMesh.js'
-import { hazardCanvas } from '../map/hazards.js'
-import { addGroundDetail, detailTexture } from './surface.js'
+import TerrainProjection from '../three/TerrainProjection.js'
+import GroundDetail from './GroundDetail.js'
 import { CanvasPanel } from './ui.jsx'
 import { desktopLook, isDrag } from './input.js'
-import { drawTag } from './draw.js'
+import PanelPainter from './PanelPainter.js'
 
 const SKY_HORIZON = '#c99a72' // dusty butterscotch near the horizon
 const SKY_ZENITH = '#5a3b2a'
@@ -34,7 +33,8 @@ function Sky() {
   )
   // Follows the camera so it is always "at infinity".
   const ref = useRef(null)
-  useFrame(({ camera }) => ref.current?.position.copy(camera.getWorldPosition(new THREE.Vector3())))
+  const eye = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }) => ref.current?.position.copy(camera.getWorldPosition(eye)))
   return (
     <mesh ref={ref} material={material} renderOrder={-1}>
       <sphereGeometry args={[7000, 32, 16]} />
@@ -54,8 +54,9 @@ function Rocks({ grid, surface, routes }) {
       }
     }
     for (let j = 0; j < 1500; j++) spots.push([rand() * grid.rows, rand() * grid.cols, 0])
-    const count = Math.min(spots.length, 12000)
-    const geo = new THREE.IcosahedronGeometry(1, 0)
+    // Capped for the headset's GPU: the rocks are one instanced draw, but every triangle still counts.
+    const count = Math.min(spots.length, 6000)
+    const geo = new THREE.OctahedronGeometry(1, 0)
     const mat = new THREE.MeshLambertMaterial({ color: '#7a4a33', flatShading: true })
     const m = new THREE.InstancedMesh(geo, mat, count)
     const o = new THREE.Object3D()
@@ -125,7 +126,7 @@ function Beacon({ position, label, color = '#ffb27a', height = 50 }) {
         width={3}
         height={0.7}
         px={512}
-        draw={(ctx, w, h) => drawTag(ctx, w, h, label)}
+        draw={(ctx, w, h) => new PanelPainter(ctx, w, h).tag(label)}
         drawKey={label}
         position={[0, 3.6, 0]}
         scale={[0.09, 0.021, 1]}
@@ -137,17 +138,33 @@ function Beacon({ position, label, color = '#ffb27a', height = 50 }) {
 }
 
 /** The landing site at true scale, with routes, stops and pinch-the-ground-to-move. */
-export function MarsSurface({ grid, textureUrl, surface, routes, paths, selectedId, showHazards, draft, onGroundPick }) {
+export const MarsSurface = memo(function MarsSurface({ grid, textureUrl, surface, routes, paths, selectedId, showHazards, draft, onGroundPick }) {
   const terrain = useMemo(() => {
     const texture = new THREE.TextureLoader().load(textureUrl)
     texture.colorSpace = THREE.SRGBColorSpace
     texture.anisotropy = 8
-    const mesh = buildTerrain(grid, makeProjection(grid, 1), texture)
-    addGroundDetail(mesh.material, detailTexture())
+    const mesh = new TerrainProjection(grid, 1).buildMesh(texture)
+    new GroundDetail().applyTo(mesh.material)
+    // Hand and controller pointers test the ground every frame: use the height-grid ray march
+    // (VRSurface.intersectRay) instead of three.js testing all ~300,000 triangles.
+    const inverse = new THREE.Matrix4()
+    const local = new THREE.Ray()
+    mesh.raycast = function (raycaster, intersects) {
+      inverse.copy(this.matrixWorld).invert()
+      local.copy(raycaster.ray).applyMatrix4(inverse)
+      const hit = surface.intersectRay(local, 0, Infinity)
+      if (!hit) return
+      const [r, c] = surface.toGrid(hit.point.x, hit.point.z)
+      const normal = surface.normalAt(r, c).transformDirection(this.matrixWorld)
+      const point = hit.point.applyMatrix4(this.matrixWorld)
+      const distance = raycaster.ray.origin.distanceTo(point)
+      if (distance < raycaster.near || distance > raycaster.far) return
+      intersects.push({ distance, point, object: this, normal, face: { a: 0, b: 0, c: 0, normal, materialIndex: 0 } })
+    }
     return mesh
-  }, [grid, textureUrl])
+  }, [grid, textureUrl, surface])
   const hazards = useMemo(() => {
-    const t = new THREE.CanvasTexture(hazardCanvas(grid))
+    const t = new THREE.CanvasTexture(grid.hazardCanvas())
     t.colorSpace = THREE.SRGBColorSpace
     const m = new THREE.Mesh(
       terrain.geometry,
@@ -223,7 +240,7 @@ export function MarsSurface({ grid, textureUrl, surface, routes, paths, selected
       ))}
     </>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // You: the rig that carries your view (and your windows) across the ground
@@ -270,8 +287,8 @@ export function PlayerRig({ surface, playerRef, children }) {
     const p = playerRef.current
     if (!g || !p) return
     const feet = surface.toWorld(p.r, p.c)
-    const delta = feet.clone().sub(g.position)
-    g.position.copy(feet)
+    const delta = feet.sub(g.position)
+    g.position.add(delta)
     if (controls.current && delta.lengthSq() > 0) {
       camera.position.add(delta)
       controls.current.target.add(delta)

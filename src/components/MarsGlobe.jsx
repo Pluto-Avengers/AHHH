@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three'
-import { createMarsTexture } from '../lib/marsTexture.js'
+import MarsTexture from '../three/MarsTexture.js'
 
 // The same NASA Mars Trek Viking MDIM 2.1 colour mosaic the Map page uses, stitched into one
 // equirectangular image by scripts/export_globe_texture.py.
@@ -61,7 +61,7 @@ export default function MarsGlobe({ ref }) {
       material.needsUpdate = true
       renderer.domElement.style.opacity = '1'
     }
-    new THREE.TextureLoader().load(TEXTURE_URL, applyTexture, undefined, () => applyTexture(createMarsTexture()))
+    new THREE.TextureLoader().load(TEXTURE_URL, applyTexture, undefined, () => applyTexture(new MarsTexture().toTexture()))
 
     // Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.25))
