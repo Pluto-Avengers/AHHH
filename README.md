@@ -33,6 +33,11 @@ out how much of the sky each spot sees (`public/sites/<id>/sky.bin`), and the ro
 alike) prefers ground where hills and crater walls block part of it. Each route's estimated dose is its walking time
 × 0.21 mGy a day (Curiosity's measurement at Gale) × the share of open sky.
 
+Gale, Gusev, Meridiani and Elysium have a simulated dust storm (`public/storms.json`, made by
+`scripts/make_storms.py`; made-up planning scenarios, not observed weather). While it is switched on in the site
+panel, the red area is closed to every route: the recommended traverse, your own routes (planned again around it)
+and Martial's.
+
 All numbers (coordinates, headings, distances, elevations, slopes, roughness) come from the same site terrain the
 map draws (`public/sites/`), read by `backend/terrain/`. A navigation procedure is accepted from the model only
 when its steps match the map exactly; otherwise, or when Ollama isn't running, Martial writes it straight from the
@@ -61,7 +66,7 @@ src/
     MarsTexture.js           procedural Mars texture (globe fallback)
   map/                       the Map page: world map, site view (3D / 2D), route details
     martial/                 Martial's chat: MartialChat, MartialReply, ReplyParser,
-                             MartialClient (API calls), MartialVoice (bark)
+                             MartialClient (API calls)
   vr/                        the VR page: MarsWorld, Windows, ui, VRSurface, WalkPath,
                              GroundDetail, PanelPainter (draws the VR panels)
 api/                         Vercel Functions for /api/agent and /api/health (wrap backend/)
@@ -74,9 +79,10 @@ backend/
     prompts.py               the router's and each skill's instructions for the model
     request.py               RequestReader: coordinates, stations and off-map destinations in a request
     llm.py                   OllamaClient
-  terrain/                   TerrainGrid (routing), LegPlanner, RouteCandidates, SiteCatalog, Coordinates
+  terrain/                   TerrainGrid (routing), LegPlanner, RouteCandidates, SiteCatalog, Coordinates,
+                             files.py (reads public/, or downloads it from the website when hosted)
 MarsOllama.py                command-line entry point for the agent
-scripts/                     SiteExporter (export_sites.py), GlobeTextureExporter
+scripts/                     SiteExporter (export_sites.py), GlobeTextureExporter, push-hosting.mjs
 public/martial/              Martial's avatar (tongue out at rest, in while speaking)
 ```
 
@@ -112,13 +118,32 @@ Controls (hands or controller trigger): pinch a button to press it, pinch a wind
 to drag it, pinch the map to go there (or to add route points while planning), and point at the ground and pinch to
 step there.
 
-## Deploy on Vercel
+## Hosting (Vercel)
 
-The site deploys as a Vite project. `vercel.json` sends every page path to `index.html` so `/map`, `/vr` and
-`/credits` work on refresh, and leaves `/api` alone.
+The website is hosted from the team repo, https://github.com/Pluto-Avengers/mars-positioning-system: Vercel
+builds its `main` branch. The code here runs unchanged both locally and on Vercel, so to update the website,
+commit your work on `main` and run
 
-Martial runs on Vercel too. `api/agent.py` and `api/health.py` are Vercel Functions that wrap the same
-`MartialAgent` as `backend/server.py`. Vercel has no Ollama, so there Martial answers from the map data only
-(the chat shows "Ollama offline, answering from map data"). Run the back end locally with Ollama for the
-model-written replies.
+```bash
+npm run push:hosting              # checks the build, then pushes main to the hosting repo's main
+npm run push:hosting -- --dry-run # only shows what would change
+```
 
+The hosting repo has its own history (files were uploaded on GitHub), so the script makes one commit on the local
+`hosting` branch with exactly `main`'s files on top of the hosting repo's latest commit, and pushes that. If
+someone changed the hosting repo directly since your last push, it lists those files and stops; copy what you want
+to keep into `main`, or pass `--overwrite`. After the first push you can also do it by hand:
+`git checkout hosting && git merge main && git push` (the `hosting` branch pushes to the hosting repo's `main`).
+Set `HOSTING_BRANCH=newest` to push to another branch of the hosting repo instead.
+
+How the same code runs on Vercel:
+
+- `vercel.json` builds the Vite site into `dist/`, sends every page path to `index.html` (so `/map`, `/vr` and
+  `/credits` work on refresh), and leaves `/api` to the functions.
+- `api/agent.py` and `api/health.py` are Vercel Functions that wrap the same `MartialAgent` as `backend/server.py`;
+  `requirements.txt` installs `ollama` for them.
+- A function doesn't get the `public/` folder, so `backend/terrain/files.py` downloads the site terrain and
+  `storms.json` from the website itself (the request's own address, or `VERCEL_PROJECT_PRODUCTION_URL`).
+- Vercel has no Ollama, so Martial answers from the map data. To have the model write his replies there, set
+  `OLLAMA_API_KEY` (from ollama.com/settings/keys) and `MARTIAL_MODEL` (a cloud model such as `gpt-oss:120b`)
+  in the Vercel project's environment variables.

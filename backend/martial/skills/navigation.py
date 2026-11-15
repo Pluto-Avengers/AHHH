@@ -6,12 +6,15 @@ those are rejected if they contain any number, so it can't invent a distance or 
 """
 
 import json
+import math
 import re
 
-from backend.martial.errors import AgentError
+from backend.martial.cues import DirectionCue
+from backend.martial.errors import AgentError, NeedsInfo
+from backend.martial.request import Point
 from backend.martial.prompts import NAVIGATION_INSTRUCTIONS
-from backend.terrain.grid import MAX_SLOPE
-from backend.terrain.legs import LegPlanner
+from backend.terrain import MAX_SLOPE, Coordinates, LegPlanner
+from backend.terrain.grid import NO_DATA
 
 from .base import Skill, SiteRequest
 
@@ -33,7 +36,7 @@ class NavigationSkill(Skill):
 
     def run(self, request: SiteRequest):
         grid = request.grid
-        dep, dst = self._endpoints(request)
+        dep, dst, notes, dep_default = self._endpoints(request)
 
         planned = grid.plan([(dep.row, dep.col), (dst.row, dst.col)])
         if "error" in planned:
@@ -55,7 +58,9 @@ class NavigationSkill(Skill):
             "distance_m": sum(leg["distance_m"] for leg in legs),
             "walk_min": stats["walk_min"],
             "dose_ugy": stats["dose_ugy"],
+            "storm": grid.blocked_reason if grid.blocked else None,
         }
+        trip["why"] = self.why(grid, dep, dst, dep_default, notes, planned, cells, stats)
         opener, signoff, source = self._personal_touch(request.message, trip)
         reply = self.text(trip, opener, signoff)
 
@@ -64,7 +69,7 @@ class NavigationSkill(Skill):
             "source": source,
             "reply": reply,
             "route": {
-                "id": f"martial-nav-{cells[0]}-{cells[-1]}",
+                "id": f"martial-nav-{cells[0]}-{cells[-1]}" + ("-storm" if grid.blocked else ""),
                 "name": f"Martial: to {dest_name or dst.label}",
                 "description": f"Directions from {dep.label} to {dst.label}: {len(legs)} legs, "
                 f"{trip['distance_m']} m on ground under {MAX_SLOPE}°.",
@@ -76,20 +81,146 @@ class NavigationSkill(Skill):
         }
 
     def _endpoints(self, request):
-        """Departure and destination named in the request (departure defaults to the landing site)."""
-        grid = request.grid
-        points, outside = request.reader.points(request.message)
-        if len(points) == 1:  # only a destination: depart from the landing site
-            points.insert(0, request.reader.station_point(grid.stations[0]))
-        if len(points) < 2:
-            where = f" {', '.join(outside)} is outside the mapped area." if outside else ""
-            s1 = request.reader.station_point(grid.stations[1])
-            raise AgentError(
-                "Give me a departure and a destination inside the mapped area of "
-                f"{request.site['name']} ({grid.bounds_text()}), as coordinates such as {s1.label}, "
-                f"or by name (landing site, stop 1 to stop {len(grid.stations) - 1}).{where}"
+        """(departure, destination, notes) of the request. The destination can be a place or a compass
+        direction from the departure ("500 m west of stop 1 on Your route 1"); the departure defaults
+        to the landing site. Asks (NeedsInfo) when something it needs is missing."""
+        grid, reader, message = request.grid, request.reader, request.message
+        dep, dst = reader.endpoints(message)
+        _, outside = reader.points(message)
+        cue = DirectionCue.parse(reader.text_without_places(message))
+        if cue and not (dep and dst):
+            start = dep or dst or reader.station_point(grid.stations[0])
+            return (*self._toward(grid, reader, start, cue), not (dep or dst))
+        defaulted = False
+        if dst and not dep:  # only a destination: depart from the landing site
+            dep = reader.station_point(grid.stations[0])
+            defaulted = True
+        if not (dep and dst):
+            where = f" ({', '.join(outside)} is outside the mapped area of {request.site['name']}.)" if outside else ""
+            raise NeedsInfo(
+                "Where would you like to go, and from where? You can name a stop on a route (like "
+                f"\"stop 1 on {self._example_route(reader)}\"), your pin, a landmark, coordinates, or a "
+                f"direction and distance such as \"500 m west\".{where}",
+                need="places",
             )
-        return points[0], points[-1]
+        return dep, dst, [], defaulted
+
+    @staticmethod
+    def _example_route(reader):
+        return reader.route_book.routes[-1]["name"] if reader.route_book.routes else "the recommended traverse"
+
+    @staticmethod
+    def _toward(grid, reader, start, cue):
+        """The destination a compass direction points to, from `start`."""
+        start_name = start.station or start.label
+        if cue.distance_m is None and not cue.to_edge:
+            raise NeedsInfo(
+                f"How far {cue.name} of {start_name} should I take you?",
+                ["200 m", "500 m", "1 km", "As far as the map goes"],
+                need="distance",
+            )
+        found = grid.point_toward(start.row, start.col, cue.bearing, None if cue.to_edge else cue.distance_m)
+        if not found:
+            raise AgentError(f"There's no safe ground {cue.name} of {start_name} on this map. Try another direction.")
+        r, c = found["rc"]
+        lat = grid.north - r / grid.rows * (grid.north - grid.south)
+        lon = grid.west + c / grid.cols * (grid.east - grid.west)
+        far = NavigationSkill._distance(found["distance_m"])
+        name = f"the {cue.name} edge of the map" if cue.to_edge and not found["moved"] else f"{far} {cue.name} of {start_name}"
+        notes = []
+        if found["clipped"]:
+            notes.append(f"The map ends about {far} {cue.name} of {start_name}, so I'm taking you to its edge.")
+        if found["moved"] and cue.to_edge:
+            notes.append(f"Safe, mapped ground runs out about {far} {cue.name} of {start_name}, so that's as far as I can take you.")
+        elif found["moved"]:
+            notes.append("The exact spot in that direction isn't safe ground, so I've picked the nearest safe spot on the way.")
+        return start, Point(Coordinates.point(lat, lon), r, c, name, "direction"), notes
+
+    @staticmethod
+    def _distance(m):
+        return f"{m / 1000:.1f} km" if m >= 1000 else f"{max(10, round(m / 10) * 10)} m"
+
+    # ---- why this route: the start, the destination and the path between them ----------------------
+    WHY_START = {
+        "station": "You asked to start at {name}.",
+        "route": "You asked to start at {name}.",
+        "pin": "You asked to start from your pinned point.",
+        "coords": "You gave these coordinates as the start.",
+    }
+    WHY_END = {
+        "station": "You asked to go to {name}.",
+        "route": "You asked to go to {name}.",
+        "pin": "You asked to go to your pinned point.",
+        "coords": "You gave these coordinates as the destination.",
+        "direction": "You asked for {name}.",
+    }
+
+    @classmethod
+    def why(cls, grid, dep, dst, dep_default, notes, planned, cells, stats):
+        """[(label, sentence)]: why the route starts and ends where it does, and why the path runs as it does."""
+        start = (
+            f"You didn't say where to start, so I used the landing site, {dep.station}, where an EVA begins."
+            if dep_default
+            else cls.WHY_START.get(dep.kind, "You asked to start here.").format(name=dep.station or dep.label)
+        )
+        start += cls._snap_note(grid, (dep.row, dep.col), planned["stopCells"][0], "start")
+        end = cls.WHY_END.get(dst.kind, "You asked to go here.").format(name=dst.station or dst.label)
+        end += "".join(f" {n}" for n in notes)
+        end += cls._snap_note(grid, (dst.row, dst.col), planned["stopCells"][-1], "destination")
+        return [("STARTING POINT", start), ("DESTINATION", end), ("THE PATH", cls._path_reason(grid, cells, stats))]
+
+    @staticmethod
+    def _snap_note(grid, asked_rc, used_cell, what):
+        """A note when the route had to start or end a little away from the point asked for."""
+        r, c = grid.rc(used_cell)
+        moved = math.hypot((r - asked_rc[0]) * grid.ch, (c - asked_rc[1]) * grid.cw)
+        if moved < max(grid.cw, grid.ch) * 1.5:
+            return ""
+        return f" The exact {what} is on ground that isn't safe to walk, so the route uses the nearest safe spot, about {round(moved / 10) * 10:.0f} m away."
+
+    @staticmethod
+    def _path_reason(grid, cells, stats):
+        """Why the path bends: what a straight line between the same two points would cross."""
+        (r0, c0), (r1, c1) = grid.rc(cells[0]), grid.rc(cells[-1])
+        straight_m = math.hypot((r1 - r0) * grid.ch, (c1 - c0) * grid.cw)
+        steps = max(1, int(math.hypot(r1 - r0, c1 - c0) * 2))
+        steep = gaps = storm = 0
+        worst = 0
+        for k in range(steps + 1):
+            r, c = round(r0 + (r1 - r0) * k / steps), round(c0 + (c1 - c0) * k / steps)
+            i = grid.index(r, c)
+            s = grid.slope[i]
+            if s == NO_DATA:
+                gaps += 1
+                continue
+            worst = max(worst, s)
+            if s > MAX_SLOPE:
+                steep += 1
+            if grid.blocked and grid.blocked[i]:
+                storm += 1
+        reasons = []
+        if storm:
+            reasons.append(f"the {grid.blocked_reason}")
+        if steep:
+            reasons.append(f"ground steeper than {MAX_SLOPE}° (up to {worst}°)")
+        if gaps:
+            reasons.append("gaps in the terrain data")
+        length = round(stats["distance_m"])
+        longer = (length / straight_m - 1) * 100 if straight_m else 0
+        compare = f"It is {length:,} m long, against {round(straight_m):,} m in a straight line"
+        compare += f" ({longer:.0f}% longer)." if longer >= 1 else "."
+        if reasons:
+            said = ", ".join(reasons[:-1]) + (" and " if len(reasons) > 1 else "") + reasons[-1]
+            why = f"A straight line would cross {said}, so the route bends around {'them' if len(reasons) > 1 or gaps else 'it'}."
+        elif worst > stats["max_slope"] + 1:
+            why = f"A straight line would cross slopes up to {worst}°; this path keeps to {stats['max_slope']}° or less."
+        elif longer >= 5:
+            why = "Nothing on the straight line is unsafe, but the route bends a little to stay on the gentlest ground, which is easier and quicker to walk in a suit."
+        else:
+            why = "It runs close to a straight line: there is nothing steep to go around."
+        sky = stats.get("mean_sky_view", 1)
+        shelter = " Where it can, it also keeps to ground sheltered from cosmic radiation by hills and crater walls." if sky < 0.995 else ""
+        return f"{why} {compare}{shelter} It always keeps to slopes under {MAX_SLOPE}°."
 
     # ---- the personal touch: from the model when it is running, else written here ---------------
     def _personal_touch(self, message, trip):
@@ -152,10 +283,14 @@ class NavigationSkill(Skill):
         lays these out as sections, see src/map/martial/ReplyParser.js); blank lines separate ideas."""
         legs = trip["legs"]
         dest = trip["to_name"]
-        lines = [f"DIRECTIONS TO {dest.upper()}" if dest else "DIRECTIONS", "", opener, ""]
+        title = dest.upper().replace(":", " -") if dest else None  # the chat lays out a heading only without colons
+        lines = [f"DIRECTIONS TO {title}" if dest else "DIRECTIONS", "", opener, ""]
         lines += [f"FROM: {trip['from_name'][:1].upper()}{trip['from_name'][1:]} · {trip['from']}"]
         lines += [f"GOING TO: {dest or 'Your destination'} · {trip['to']}", ""]
+        if trip.get("why"):
+            lines += ["WHY THIS ROUTE"] + [f"{label}: {text}" for label, text in trip["why"]] + [""]
 
+        previous = None
         for k, leg in enumerate(legs):
             first, last = k == 0, k == len(legs) - 1
             heading = f"{leg['heading']:03d}° ({cls.compass(leg['heading'])})"
@@ -163,12 +298,14 @@ class NavigationSkill(Skill):
             lines.append(f"LEG {k + 1} - {title}")
             if first:
                 lines.append(f"Face {heading} and walk about {leg['distance_m']} m.")
-            elif last:
-                lines.append(f"Turn to {heading} for the last {leg['distance_m']} m.")
             else:
-                lines.append(f"Turn to {heading} and keep going for about {leg['distance_m']} m.")
-            if not first and not last:  # every middle leg warns about its elevation change
+                turn = cls.turn(leg["heading"] - previous)
+                tail = f"for the last {leg['distance_m']} m" if last else f"and keep going for about {leg['distance_m']} m"
+                lines.append(f"{turn} {heading} {tail}.")
+            # every middle leg warns about its elevation change; the first and last when they climb or drop
+            if not first and not last or leg.get("trend", "LEVEL") != "LEVEL":
                 lines.append(cls._elevation_note(leg))
+            previous = leg["heading"]
             hz = leg["hazard"]
             if hz and hz["bypass_heading"] is not None:
                 lines.append(
@@ -192,11 +329,25 @@ class NavigationSkill(Skill):
         return "\n".join(lines)
 
     @staticmethod
+    def turn(delta):
+        """How a change of heading (degrees, + = clockwise) is said: "Bear slightly left to" and the like."""
+        delta = (delta + 540) % 360 - 180
+        side = "right" if delta > 0 else "left"
+        if abs(delta) < 20:
+            return "Carry straight on at"
+        if abs(delta) < 45:
+            return f"Bear slightly {side} to"
+        if abs(delta) < 120:
+            return f"Turn {side} to"
+        return f"Turn sharply {side} to"
+
+    @staticmethod
     def _elevation_note(leg):
         dz = leg["elevation_change_m"]
-        if leg["terrain"] == "ASCENT":
+        trend = leg.get("trend", leg["terrain"])
+        if trend == "ASCENT":
             return f"Heads up: this stretch climbs about {dz} m, so take it slow and steady."
-        if leg["terrain"] == "DESCENT":
+        if trend == "DESCENT":
             return f"Heads up: this stretch drops about {dz} m, so watch your footing on the way down."
         if dz == 0:
             return "Heads up: the ground stays level here, with less than a metre of height change."

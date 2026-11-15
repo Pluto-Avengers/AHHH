@@ -3,7 +3,7 @@
 import math
 
 from .coordinates import Coordinates
-from .grid import HAZARD_SLOPE
+from .grid import HAZARD_SLOPE, NO_DATA
 
 LEVEL_TOLERANCE_M = 3  # a leg that rises or falls less than this is LEVEL
 
@@ -53,6 +53,7 @@ class LegPlanner:
             "heading": round(grid.heading(seg[0], seg[-1])) % 360,
             "distance_m": round(distance_m),
             "terrain": terrain,
+            "trend": terrain,  # LEVEL / ASCENT / DESCENT, kept for the first and last legs too
             "elevation_change_m": round(abs(dz)),
             "end": Coordinates.cell(grid, seg[-1]),
             "hazard": self._hazard(seg),
@@ -61,8 +62,8 @@ class LegPlanner:
     def _hazard(self, seg):
         """The steepest ground on the leg, if it is steep enough to warn about, with a bypass heading."""
         grid = self.grid
-        steepest = max(seg, key=lambda i: grid.slope[i])
-        if grid.slope[steepest] <= HAZARD_SLOPE:
+        steepest = max(seg, key=lambda i: 0 if grid.slope[i] == NO_DATA else grid.slope[i])
+        if grid.slope[steepest] <= HAZARD_SLOPE or grid.slope[steepest] == NO_DATA:
             return None
         k = seg.index(steepest)
         ahead = seg[min(k + 8, len(seg) - 1)]

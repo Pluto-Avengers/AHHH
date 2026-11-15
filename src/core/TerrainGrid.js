@@ -44,10 +44,35 @@ export default class TerrainGrid {
     this.height = height
     this.slope = slope
     this.sky = sky
-    // The cheapest a meter can be anywhere on the site keeps the A* estimate from overshooting.
+    this.blocked = null // Uint8Array, 1 = closed to routes (a dust storm); null = nothing closed
+    this.blockedReason = null
+    this.leastFactor = TerrainGrid.#cheapestFactor(this)
+  }
+
+  /** The cheapest a meter can be anywhere on the site: keeps the A* estimate from overshooting. */
+  static #cheapestFactor(grid) {
     let least = 1
-    for (let i = 0; i < slope.length; i++) if (this.passable(i)) least = Math.min(least, radiationFactor[sky[i]])
-    this.leastFactor = least
+    for (let i = 0; i < grid.slope.length; i++) if (grid.passable(i)) least = Math.min(least, radiationFactor[grid.sky[i]])
+    return least
+  }
+
+  /**
+   * A copy of this grid (sharing its terrain data) where the cells set in `mask` are closed to
+   * routes, e.g. a dust storm. `reason` names the area in error messages.
+   */
+  withBlocked(mask, reason) {
+    const copy = Object.assign(Object.create(TerrainGrid.prototype), this)
+    copy.blocked = mask
+    copy.blockedReason = reason
+    copy.leastFactor = TerrainGrid.#cheapestFactor(copy)
+    return copy
+  }
+
+  /** Is grid point (r, c) inside a closed area? */
+  isBlocked(r, c) {
+    const rr = Math.round(r)
+    const cc = Math.round(c)
+    return Boolean(this.blocked) && this.inBounds(rr, cc) && this.blocked[this.index(rr, cc)] === 1
   }
 
   /** Suited walking speed (m/s) from grade: Tobler-style, slowed for EVA suits. A planning assumption. */
@@ -69,7 +94,7 @@ export default class TerrainGrid {
   }
 
   passable(i) {
-    return this.slope[i] !== NO_DATA && this.slope[i] <= MAX_SLOPE
+    return this.slope[i] !== NO_DATA && this.slope[i] <= MAX_SLOPE && !(this.blocked && this.blocked[i])
   }
 
   /** Fraction of the sky (0..1) open above cell i; lower means more radiation shielding. */
@@ -182,6 +207,9 @@ export default class TerrainGrid {
    * Returns { cells, stopCells } or { error }.
    */
   planRoute(waypoints) {
+    // A point inside a closed area (a dust storm) is refused, never quietly moved out of it.
+    const inside = waypoints.findIndex(([r, c]) => this.isBlocked(r, c))
+    if (inside !== -1) return { error: `Point ${inside + 1} is inside the ${this.blockedReason}, which routes must avoid.` }
     const snapped = waypoints.map(([r, c]) => this.snap(r, c))
     const bad = snapped.indexOf(null)
     if (bad !== -1) return { error: `Point ${bad + 1} is on terrain that is too steep or has no data.` }

@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "quest": "vite --mode quest"
+    "quest": "vite --mode quest",
+    "push:hosting": "node scripts/push-hosting.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

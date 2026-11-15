@@ -5,50 +5,17 @@ the same routing as src/core/TerrainGrid.js, so every number the agent uses come
 coordinates, distances, headings, elevations and slopes.
 """
 
+import copy
 import heapq
 import json
 import math
-import os
-import urllib.request
 from array import array
 from pathlib import Path
 
 from .coordinates import Coordinates
+from .files import read_public_file
 
 SITES_DIR = Path(__file__).resolve().parent.parent.parent / "public" / "sites"
-
-# Where to download a site's terrain when public/sites isn't on disk. A Vercel Function doesn't get the
-# public/ folder, but the website serves the same files at /sites/<id>/. Filled from the environment
-# here, and from the request's own address by api/agent.py.
-SITE_URLS = []
-
-
-def add_site_url(url):
-    """Registers a base address that serves the site folders, e.g. https://example.vercel.app/sites."""
-    url = (url or "").strip().rstrip("/")
-    if url and url not in SITE_URLS:
-        SITE_URLS.append(url)
-
-
-add_site_url(os.environ.get("MPS_SITES_URL"))
-if os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"):
-    add_site_url(f"https://{os.environ['VERCEL_PROJECT_PRODUCTION_URL']}/sites")
-
-
-def read_site_file(site_id, name, sites_dir=SITES_DIR):
-    """A site file's bytes: from disk when it is there, otherwise downloaded from the website."""
-    path = Path(sites_dir) / site_id / name
-    if path.exists():
-        return path.read_bytes()
-    problem = FileNotFoundError(f"{path} is not on disk and no website address is known to download it from")
-    for base in SITE_URLS:
-        try:
-            request = urllib.request.Request(f"{base}/{site_id}/{name}", headers={"User-Agent": "martial-backend"})
-            with urllib.request.urlopen(request, timeout=15) as response:
-                return response.read()
-        except OSError as e:  # unreachable or not found: try the next address
-            problem = OSError(f"Could not download {name} for {site_id} from {base}: {e}")
-    raise problem
 
 MAX_SLOPE = 25  # degrees: steeper is unsafe for a suited astronaut (same as TerrainGrid.js)
 HAZARD_SLOPE = 15  # degrees: ground the map tints amber; reported to the astronaut
@@ -75,7 +42,12 @@ class TerrainGrid:
     """Elevation (m), slope (deg) and sky view per cell, row 0 = north."""
 
     def __init__(self, site_id, sites_dir=SITES_DIR):
-        terrain = json.loads(read_site_file(site_id, "terrain.json", sites_dir).decode("utf-8"))
+        folder = Path(sites_dir) / site_id
+
+        def read(name):  # from disk, or downloaded from the website when hosted (see files.py)
+            return read_public_file(f"sites/{site_id}/{name}", folder / name)
+
+        terrain = json.loads(read("terrain.json").decode("utf-8"))
         self.id = site_id
         self.rows = terrain["rows"]
         self.cols = terrain["cols"]
@@ -84,18 +56,28 @@ class TerrainGrid:
         self.stations = terrain["stations"]
         self.reference = terrain.get("reference")
         self.height = array("f")
-        self.height.frombytes(read_site_file(site_id, "height.bin", sites_dir))
-        self.slope = read_site_file(site_id, "slope.bin", sites_dir)
+        self.height.frombytes(read("height.bin"))
+        self.slope = read("slope.bin")
         cells = self.rows * self.cols
         if len(self.height) != cells or len(self.slope) != cells:
             raise OSError(f"The terrain files for {site_id} are incomplete or the wrong size.")
         try:  # radiation shielding; missing = open sky everywhere
-            self.sky = read_site_file(site_id, "sky.bin", sites_dir)
+            self.sky = read("sky.bin")
         except OSError:
             self.sky = b""
         if len(self.sky) != len(self.slope):
             self.sky = bytes([254]) * len(self.slope)
         self._least = {}  # radiation weight -> cheapest radiation factor on the site
+        self.blocked = None  # bytearray, 1 = closed to routes (a dust storm); None = nothing closed
+        self.blocked_reason = None
+
+    def with_blocked(self, mask, reason):
+        """A copy of this grid (sharing its terrain data) where the cells set in `mask` are closed to routes."""
+        clone = copy.copy(self)
+        clone.blocked = mask
+        clone.blocked_reason = reason
+        clone._least = {}
+        return clone
 
     @staticmethod
     def walk_speed_ms(grade):
@@ -114,7 +96,43 @@ class TerrainGrid:
 
     def passable(self, i):
         s = self.slope[i]
-        return s != NO_DATA and s <= MAX_SLOPE
+        return s != NO_DATA and s <= MAX_SLOPE and not (self.blocked and self.blocked[i])
+
+    def point_toward(self, r, c, bearing, distance_m=None):
+        """The walkable spot `distance_m` from (r, c) along a compass bearing (to the map's edge when
+        distance_m is None). Stops at the edge of the map, and steps back towards the start until the
+        ground is safe (not steep, no data or a closed storm). Returns {rc, distance_m, clipped, moved}
+        or None if nothing in that direction is walkable."""
+        rad = math.radians(bearing)
+        per_m = (-math.cos(rad) / self.ch, math.sin(rad) / self.cw)  # rows and cols per meter
+        # How far the map goes in that direction
+        limits = []
+        for v, d, hi in ((r, per_m[0], self.rows - 1), (c, per_m[1], self.cols - 1)):
+            if d > 1e-12:
+                limits.append((hi - v) / d)
+            elif d < -1e-12:
+                limits.append((0 - v) / d)
+        edge = max(0.0, min(limits)) if limits else 0.0
+        want = edge if distance_m is None else distance_m
+        t = min(want, edge)
+        step = min(self.cw, self.ch) / 2
+        start_t = t
+        while t > step:
+            rr, cc = round(r + per_m[0] * t), round(c + per_m[1] * t)
+            if self.in_bounds(rr, cc) and self.passable(self.index(rr, cc)):
+                return {
+                    "rc": (r + per_m[0] * t, c + per_m[1] * t),
+                    "distance_m": t,
+                    "clipped": distance_m is not None and distance_m > edge,
+                    "moved": start_t - t > step * 2,
+                }
+            t -= step
+        return None
+
+    def is_blocked(self, r, c):
+        """Is (r, c) inside a closed area (a dust storm)?"""
+        r, c = round(r), round(c)
+        return bool(self.blocked) and self.in_bounds(r, c) and self.blocked[self.index(r, c)] == 1
 
     def latlon_to_rc(self, lat, lon):
         r = (self.north - lat) / (self.north - self.south) * self.rows
@@ -208,6 +226,9 @@ class TerrainGrid:
 
     def plan(self, waypoints, slope_weight=SLOPE_WEIGHT, radiation_weight=RADIATION_WEIGHT):
         """Route through (row, col) waypoints in order. Returns {cells, stopCells} or {error}."""
+        for k, (r, c) in enumerate(waypoints):
+            if self.is_blocked(r, c):  # never quietly move a point out of a storm
+                return {"error": f"Point {k + 1} is inside the {self.blocked_reason}, which routes must avoid."}
         snapped = [self.snap(r, c) for r, c in waypoints]
         if None in snapped:
             k = snapped.index(None)

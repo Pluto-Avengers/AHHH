@@ -1,3 +1,5 @@
+import MartialReply from './martial/MartialReply.jsx'
+import Coordinates from '../core/Coordinates.js'
 import RoutePlanner from '../core/RoutePlanner.js'
 
 const formatTime = (minutes) => {
@@ -87,17 +89,32 @@ export default function RouteInfo({ route, onClose, onDelete }) {
         </div>
       </dl>
       <p className="route-note">{risk.note}.</p>
+      {route.stormNote && <p className="route-storm-note">{route.stormNote}</p>}
 
       <Profile profile={stats.profile} />
+
+      {route.guide && (
+        <details className="route-directions" key={`${route.id}-${route.cells.length}`}>
+          <summary>
+            <span>Directions</span>
+            <span className="muted">{(route.guide.match(/^LEG \d+/gm) ?? []).length} legs</span>
+          </summary>
+          {/* the same layout as Martial's replies in the chat */}
+          <div className="route-guide">
+            <MartialReply text={route.guide} />
+          </div>
+        </details>
+      )}
 
       {route.stops?.length > 0 && (
         <>
           <h3>Stops</h3>
           <ol className="route-stops">
-            {route.stops.map((stop) => (
-              <li key={stop.name}>
+            {route.stops.map((stop, k) => (
+              <li key={`${k}-${stop.name}`}>
                 {stop.name}
                 {stop.note && <span className="muted"> · {stop.note}</span>}
+                {stop.lat != null && <span className="stop-coords">{Coordinates.point(stop.lat, stop.lon)}</span>}
               </li>
             ))}
           </ol>

@@ -40,6 +40,7 @@ export default function Map2D({
   draft,
   draftLabels,
   probe,
+  storm,
   drawing,
   showHazards,
   onRouteClick,
@@ -269,6 +270,17 @@ export default function Map2D({
     [routes, selectedId, grid],
   )
 
+  // Dust storm outline in map meters (cell centres sit at col × cw, row × ch)
+  const stormShape = useMemo(() => {
+    if (!storm) return null
+    const pts = storm.outline(grid)
+    return {
+      points: pts.map(([r, c]) => `${c * grid.cw},${r * grid.ch}`).join(' '),
+      x: (pts.reduce((s, p) => s + p[1], 0) / pts.length) * grid.cw,
+      y: (pts.reduce((s, p) => s + p[0], 0) / pts.length) * grid.ch,
+    }
+  }, [storm, grid])
+
   const k = view && size.w ? view.w / size.w : 1 // meters per screen pixel
   const scaleM = niceLength(110 * k)
 
@@ -297,6 +309,15 @@ export default function Map2D({
         />
         {showHazards && (
           <image href={hazards} x={-grid.cw / 2} y={-grid.ch / 2} width={worldW} height={worldH} preserveAspectRatio="none" />
+        )}
+
+        {stormShape && (
+          <g>
+            <polygon points={stormShape.points} className="map2d-storm" />
+            <text x={stormShape.x} y={stormShape.y} fontSize={15 * k} strokeWidth={4 * k} className="map2d-storm-label">
+              Dust storm
+            </text>
+          </g>
         )}
 
         {routeEls}

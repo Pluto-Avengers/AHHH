@@ -53,6 +53,7 @@ export default function TerrainScene({
   draft,
   draftLabels,
   probe,
+  storm,
   drawing,
   onRouteClick,
   onTerrainClick,
@@ -187,7 +188,7 @@ export default function TerrainScene({
     }
     animate()
 
-    ctxRef.current = { proj, routeGroup, stationGroup, draftGroup, probeGroup }
+    ctxRef.current = { proj, terrain, scene, routeGroup, stationGroup, draftGroup, probeGroup }
 
     return () => {
       cancelAnimationFrame(frame)
@@ -285,6 +286,35 @@ export default function TerrainScene({
       draftGroup.add(line)
     }
   }, [grid, draft, draftLabels])
+
+  // --- dust storm: a red area draped on the terrain, outlined, while it is switched on ----------
+  useEffect(() => {
+    const ctx = ctxRef.current
+    if (!ctx || !storm) return
+    const { proj, terrain, scene } = ctx
+    const texture = new THREE.CanvasTexture(storm.overlayCanvas(grid))
+    texture.colorSpace = THREE.SRGBColorSpace
+    const overlay = new THREE.Mesh(
+      terrain.geometry, // shares the terrain's shape, so the red follows the ground exactly
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    )
+    const outline = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(storm.outline(grid).map(([r, c]) => proj.toWorld(r, c, proj.span * 0.002))),
+      new THREE.LineBasicMaterial({ color: 0xff5a4a }),
+    )
+    const center = storm.outline(grid).reduce((a, [r, c]) => [a[0] + r, a[1] + c], [0, 0]).map((v) => v / storm.polygon.length)
+    const tag = label('Dust storm', 'scene-label scene-label-storm')
+    tag.position.copy(proj.toWorld(center[0], center[1], proj.span * 0.02))
+    scene.add(overlay, outline, tag)
+    return () => {
+      scene.remove(overlay, outline, tag)
+      tag.element.remove()
+      overlay.material.dispose()
+      texture.dispose()
+      outline.geometry.dispose()
+      outline.material.dispose()
+    }
+  }, [grid, storm])
 
   // --- the point you clicked (its coordinates are shown by SiteView) --------
   useEffect(() => {

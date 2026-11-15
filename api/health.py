@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # project root, so 'backend' imports
 
-from backend.martial.agent import MartialAgent  # noqa: E402
+from backend.martial import MartialAgent  # noqa: E402
 from backend.server import AgentRequestHandler  # noqa: E402
 
 

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from backend.martial.request import RequestReader
-from backend.terrain.grid import TerrainGrid
+from backend.terrain import TerrainGrid
 
 
 @dataclass
