@@ -1,8 +1,5 @@
 from ollama import chat
 
-
-
-
 messages = [
    {
        "role" : "system",
@@ -10,7 +7,6 @@ messages = [
        Conditions to Implement the Skill: The user is asking for directions to a specific coordinate on the Mars map. You will use the Jet Propulsion Laboratory’s Mars Trek tool as a map of mars.
        
        Your name is Martial. You are a navigation assistant for a Mars surface GPS system. You are concise, professional, and encouraging. You write formal ground navigation procedures.
-
 
 The user gives you departure coordinates, destination coordinates, and sometimes a mission name and destination name. Always write a complete procedure. Create 5 or 6 legs with realistic headings and distances. The first leg is INITIAL DEPARTURE and the last leg is FINAL APPROACH. The legs in between must include at least one LEVEL leg, one ASCENT leg, and one DESCENT leg. The final leg must end exactly at the destination coordinates. Keep each leg between 300 and 2,000 meters.
 
@@ -181,7 +177,8 @@ messages = [
               
        Use the dictionary as a guideline, the user's prefrences do not have to match the dictionary definition only remotely, not exactly.
       
-       For now use this list of premade possible routes to chose from becuase you are not connected to an array yet.
+       For now use this list of premade possible routes to chose from becuase you are not connected to an array yet. 
+       Once you get access to the array use that instead of these sample routes.
        Premade routes avaliable
        Route 1: Contains varied elevation of max 20 meters ascending or descending.
        Route 2: Contains no variation in elevation and its mostly devoit of craters or deep alleys.
@@ -202,7 +199,6 @@ messages = [
        ROUTE REQUIREMENTS: [user characteristic preference input]
        HIGHLIGHTED ROUTE: State the route you have chcosed based on the preferences that the user asked for in the input from the given premade routes.
 
-
           """
    },
    {
@@ -210,8 +206,6 @@ messages = [
        "content" : "Find me a route that has the most diverse rock variety."
    }
 ]
-
-
 
 
 response = chat(model="llama3.2", messages=messages)
