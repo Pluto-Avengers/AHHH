@@ -8,9 +8,11 @@ those are rejected if they contain any number, so it can't invent a distance or 
 import json
 import re
 
-from backend.martial.errors import AgentError
+from backend.martial.cues import DirectionCue
+from backend.martial.errors import AgentError, NeedsInfo
+from backend.martial.request import Point
 from backend.martial.prompts import NAVIGATION_INSTRUCTIONS
-from backend.terrain import MAX_SLOPE, LegPlanner
+from backend.terrain import MAX_SLOPE, Coordinates, LegPlanner
 
 from .base import Skill, SiteRequest
 
@@ -32,7 +34,7 @@ class NavigationSkill(Skill):
 
     def run(self, request: SiteRequest):
         grid = request.grid
-        dep, dst = self._endpoints(request)
+        dep, dst, notes = self._endpoints(request)
 
         planned = grid.plan([(dep.row, dep.col), (dst.row, dst.col)])
         if "error" in planned:
@@ -54,6 +56,8 @@ class NavigationSkill(Skill):
             "distance_m": sum(leg["distance_m"] for leg in legs),
             "walk_min": stats["walk_min"],
             "dose_ugy": stats["dose_ugy"],
+            "storm": grid.blocked_reason if grid.blocked else None,
+            "notes": notes,
         }
         opener, signoff, source = self._personal_touch(request.message, trip)
         reply = self.text(trip, opener, signoff)
@@ -63,7 +67,7 @@ class NavigationSkill(Skill):
             "source": source,
             "reply": reply,
             "route": {
-                "id": f"martial-nav-{cells[0]}-{cells[-1]}",
+                "id": f"martial-nav-{cells[0]}-{cells[-1]}" + ("-storm" if grid.blocked else ""),
                 "name": f"Martial: to {dest_name or dst.label}",
                 "description": f"Directions from {dep.label} to {dst.label}: {len(legs)} legs, "
                 f"{trip['distance_m']} m on ground under {MAX_SLOPE}°.",
@@ -75,20 +79,61 @@ class NavigationSkill(Skill):
         }
 
     def _endpoints(self, request):
-        """Departure and destination named in the request (departure defaults to the landing site)."""
-        grid = request.grid
-        points, outside = request.reader.points(request.message)
-        if len(points) == 1:  # only a destination: depart from the landing site
-            points.insert(0, request.reader.station_point(grid.stations[0]))
-        if len(points) < 2:
-            where = f" {', '.join(outside)} is outside the mapped area." if outside else ""
-            s1 = request.reader.station_point(grid.stations[1])
-            raise AgentError(
-                "Give me a departure and a destination inside the mapped area of "
-                f"{request.site['name']} ({grid.bounds_text()}), as coordinates such as {s1.label}, "
-                f"or by name (landing site, stop 1 to stop {len(grid.stations) - 1}).{where}"
+        """(departure, destination, notes) of the request. The destination can be a place or a compass
+        direction from the departure ("500 m west of stop 1 on Your route 1"); the departure defaults
+        to the landing site. Asks (NeedsInfo) when something it needs is missing."""
+        grid, reader, message = request.grid, request.reader, request.message
+        dep, dst = reader.endpoints(message)
+        _, outside = reader.points(message)
+        cue = DirectionCue.parse(reader.text_without_places(message))
+        if cue and not (dep and dst):
+            return self._toward(grid, reader, dep or dst or reader.station_point(grid.stations[0]), cue)
+        if dst and not dep:  # only a destination: depart from the landing site
+            dep = reader.station_point(grid.stations[0])
+        if not (dep and dst):
+            where = f" ({', '.join(outside)} is outside the mapped area of {request.site['name']}.)" if outside else ""
+            raise NeedsInfo(
+                "Where would you like to go, and from where? You can name a stop on a route (like "
+                f"\"stop 1 on {self._example_route(reader)}\"), your pin, a landmark, coordinates, or a "
+                f"direction and distance such as \"500 m west\".{where}",
+                need="places",
             )
-        return points[0], points[-1]
+        return dep, dst, []
+
+    @staticmethod
+    def _example_route(reader):
+        return reader.route_book.routes[-1]["name"] if reader.route_book.routes else "the recommended traverse"
+
+    @staticmethod
+    def _toward(grid, reader, start, cue):
+        """The destination a compass direction points to, from `start`."""
+        start_name = start.station or start.label
+        if cue.distance_m is None and not cue.to_edge:
+            raise NeedsInfo(
+                f"How far {cue.name} of {start_name} should I take you?",
+                ["200 m", "500 m", "1 km", "As far as the map goes"],
+                need="distance",
+            )
+        found = grid.point_toward(start.row, start.col, cue.bearing, None if cue.to_edge else cue.distance_m)
+        if not found:
+            raise AgentError(f"There's no safe ground {cue.name} of {start_name} on this map. Try another direction.")
+        r, c = found["rc"]
+        lat = grid.north - r / grid.rows * (grid.north - grid.south)
+        lon = grid.west + c / grid.cols * (grid.east - grid.west)
+        far = NavigationSkill._distance(found["distance_m"])
+        name = f"the {cue.name} edge of the map" if cue.to_edge and not found["moved"] else f"{far} {cue.name} of {start_name}"
+        notes = []
+        if found["clipped"]:
+            notes.append(f"The map ends about {far} {cue.name} of {start_name}, so I'm taking you to its edge.")
+        if found["moved"] and cue.to_edge:
+            notes.append(f"Safe, mapped ground runs out about {far} {cue.name} of {start_name}, so that's as far as I can take you.")
+        elif found["moved"]:
+            notes.append("The exact spot in that direction isn't safe ground, so I've picked the nearest safe spot on the way.")
+        return start, Point(Coordinates.point(lat, lon), r, c, name, "direction"), notes
+
+    @staticmethod
+    def _distance(m):
+        return f"{m / 1000:.1f} km" if m >= 1000 else f"{max(10, round(m / 10) * 10)} m"
 
     # ---- the personal touch: from the model when it is running, else written here ---------------
     def _personal_touch(self, message, trip):
@@ -151,7 +196,12 @@ class NavigationSkill(Skill):
         lays these out as sections, see src/map/martial/ReplyParser.js); blank lines separate ideas."""
         legs = trip["legs"]
         dest = trip["to_name"]
-        lines = [f"DIRECTIONS TO {dest.upper()}" if dest else "DIRECTIONS", "", opener, ""]
+        title = dest.upper().replace(":", " -") if dest else None  # the chat lays out a heading only without colons
+        lines = [f"DIRECTIONS TO {title}" if dest else "DIRECTIONS", "", opener, ""]
+        if trip.get("storm"):
+            lines += [f"There's a {trip['storm']} on the map, so this route keeps well clear of the red area.", ""]
+        for note in trip.get("notes") or []:
+            lines += [note, ""]
         lines += [f"FROM: {trip['from_name'][:1].upper()}{trip['from_name'][1:]} · {trip['from']}"]
         lines += [f"GOING TO: {dest or 'Your destination'} · {trip['to']}", ""]
 

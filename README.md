@@ -33,6 +33,11 @@ out how much of the sky each spot sees (`public/sites/<id>/sky.bin`), and the ro
 alike) prefers ground where hills and crater walls block part of it. Each route's estimated dose is its walking time
 × 0.21 mGy a day (Curiosity's measurement at Gale) × the share of open sky.
 
+Gale, Gusev, Meridiani and Elysium have a simulated dust storm (`public/storms.json`, made by
+`scripts/make_storms.py`; made-up planning scenarios, not observed weather). While it is switched on in the site
+panel, the red area is closed to every route: the recommended traverse, your own routes (planned again around it)
+and Martial's.
+
 All numbers (coordinates, headings, distances, elevations, slopes, roughness) come from the same site terrain the
 map draws (`public/sites/`), read by `backend/terrain/`. A navigation procedure is accepted from the model only
 when its steps match the map exactly; otherwise, or when Ollama isn't running, Martial writes it straight from the

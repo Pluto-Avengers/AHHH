@@ -15,10 +15,12 @@ class RouteCandidates:
     def __init__(self, grid):
         self.grid = grid
 
-    def build(self, client_routes, departure_rc=None):
+    def build(self, client_routes, departure_rc=None, departure_name=None):
         """The routes on the map now, plus safest, most shielded and most direct paths from the departure point
         (the landing site by default) to every science stop. Each gets a key R1, R2, ... and its stats."""
-        routes = self._client_routes(client_routes) + self._planned_routes(departure_rc)
+        # Routes already on the map only count when they can start where the user starts (no departure given)
+        own = self._client_routes(client_routes) if departure_rc is None else []
+        routes = own + self._planned_routes(departure_rc, departure_name)
         unique = self._without_duplicates(routes)
         for k, r in enumerate(unique, 1):
             self._describe(r, f"R{k}")
@@ -49,13 +51,15 @@ class RouteCandidates:
                 out.append({"id": r["id"], "name": r.get("name", r["id"]), "cells": cells, "new": False})
         return out
 
-    def _planned_routes(self, departure_rc):
+    def _planned_routes(self, departure_rc, departure_name=None):
         grid = self.grid
         if departure_rc is None:
             start_rc, start_name = grid.stations[0]["rc"], grid.stations[0]["name"]
         else:
-            start_rc, start_name = departure_rc, "your departure point"
+            start_rc, start_name = departure_rc, departure_name or "your departure point"
         suffix = "" if departure_rc is None else f"-{round(start_rc[0])}-{round(start_rc[1])}"
+        if grid.blocked:
+            suffix += "-storm"  # a different path from the one planned without the storm
         out = []
         for k, s in enumerate(grid.stations):
             if departure_rc is None and k == 0:

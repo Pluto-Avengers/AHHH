@@ -5,7 +5,12 @@
 import { ReplyParser } from './ReplyParser.js'
 
 const parser = new ReplyParser()
-const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
+// "500 M WEST OF STOP 1" -> "500 m West Of Stop 1": units after a number stay lower case
+const titleCase = (s) =>
+  s
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase())
+    .replace(/(\d) (M|Km)\b/g, (_, d, unit) => `${d} ${unit.toLowerCase()}`)
 
 export default function MartialReply({ text, typing }) {
   return (

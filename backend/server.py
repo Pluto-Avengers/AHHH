@@ -4,8 +4,9 @@
 
 Endpoints
     GET  /api/health   is Ollama running, and is the model installed?
-    POST /api/agent    {"site": "jezero", "message": "...", "routes": [{"id", "name", "kind", "cells"}]}
+    POST /api/agent    {"site": "jezero", "message": "...", "routes": [{"id", "name", "kind", "cells"}], "storm": false}
                        -> {"skill", "source", "reply", "highlight"?, "route"?}
+                       or a question: {"skill": "CLARIFY", "reply", "choices", "pending"} (send "pending" back with the answer)
 
 The Vite dev server forwards /api here (see vite.config.js), so the site and the agent share one origin.
 """
@@ -60,7 +61,14 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             body = json.loads(self.rfile.read(length))
-            result = self.agent.ask(body.get("site", ""), body.get("message", ""), body.get("routes") or [])
+            result = self.agent.ask(
+                body.get("site", ""),
+                body.get("message", ""),
+                body.get("routes") or [],
+                storm=bool(body.get("storm")),
+                pin=body.get("pin"),
+                pending=body.get("pending"),
+            )
             self._send(200, result)
         except AgentError as e:
             self._send(200, {"skill": None, "source": "map", "reply": str(e)})

@@ -6,7 +6,7 @@ import { NO_DATA } from '../core/TerrainGrid.js'
  * What's at the point you clicked on the site: coordinates, elevation, slope and open sky.
  * onStart / onDestination start planning a route from or to it.
  */
-export default function PointCard({ grid, point, onClose, onStart, onDestination }) {
+export default function PointCard({ grid, point, storm = null, onClose, onStart, onDestination }) {
   const [copied, setCopied] = useState(false)
   const [r, c] = point
   const [lat, lon] = grid.latLonAt(r, c)
@@ -45,7 +45,8 @@ export default function PointCard({ grid, point, onClose, onStart, onDestination
       ) : (
         <p className="point-facts">No terrain data here.</p>
       )}
-      {known && (onStart || onDestination) && (
+      {storm && <p className="point-storm">Inside the {storm}: routes can't start, stop or pass here.</p>}
+      {known && !storm && (onStart || onDestination) && (
         <div className="point-actions">
           {onStart && (
             <button type="button" className="button" onClick={onStart}>

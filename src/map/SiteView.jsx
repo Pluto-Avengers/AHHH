@@ -3,6 +3,7 @@ import { siteLoader } from '../core/SiteLoader.js'
 import RoutePlanner from '../core/RoutePlanner.js'
 import RouteDraft from '../core/RouteDraft.js'
 import Coordinates from '../core/Coordinates.js'
+import DustStorm from '../core/DustStorm.js'
 import CoordinateSearch from './CoordinateSearch.jsx'
 import TerrainScene from './TerrainScene.jsx'
 import RouteInfo from './RouteInfo.jsx'
@@ -34,6 +35,8 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
   const [message, setMessage] = useState(null)
   const [mode, setMode] = useState(initialMode)
   const [showHazards, setShowHazards] = useState(false)
+  const [storm, setStorm] = useState(null) // this site's (simulated) dust storm, if it has one
+  const [stormOn, setStormOn] = useState(true)
   const [probe, setProbe] = useState(null) // [row, col] of the point last clicked: its coordinates are shown
   // The right side holds Martial's chat and the route details. When both are open, the one in
   // `focus` is expanded and the other shrinks to a chip in the bottom-right corner.
@@ -51,10 +54,11 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
 
   useEffect(() => {
     let cancelled = false
-    siteLoader.load(site.id)
-      .then((d) => {
+    Promise.all([siteLoader.load(site.id), DustStorm.loadAll()])
+      .then(([d, storms]) => {
         if (cancelled) return
         setData(d)
+        setStorm(storms[site.id] ?? null)
         if (focusPoint && d.grid.contains(focusPoint.lat, focusPoint.lon)) setProbe(d.grid.gridAt(focusPoint.lat, focusPoint.lon))
       })
       .catch((e) => !cancelled && setError(e.message))
@@ -66,9 +70,25 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
   }, [site.id])
 
   const grid = data?.grid
-  const builtIn = useMemo(() => (grid ? new RoutePlanner(grid).builtInRoutes() : []), [grid])
-  const routes = useMemo(() => [...builtIn, ...customRoutes], [builtIn, customRoutes])
+  const activeStorm = storm && stormOn ? storm : null
+  // Routes are planned on this grid: the storm area (when it is shown) is closed to them.
+  const routingGrid = useMemo(
+    () => (grid && activeStorm ? grid.withBlocked(activeStorm.mask(grid), activeStorm.name) : grid),
+    [grid, activeStorm],
+  )
+  const builtIn = useMemo(() => (routingGrid ? new RoutePlanner(routingGrid).builtInRoutes() : []), [routingGrid])
+  // Your own and Martial's routes are planned again around the storm while it is shown.
+  const routes = useMemo(() => {
+    if (!routingGrid) return builtIn
+    const planner = new RoutePlanner(routingGrid)
+    return [...builtIn, ...customRoutes.map((r) => planner.fit(r))]
+  }, [builtIn, customRoutes, routingGrid])
   const selected = routes.find((r) => r.id === selectedId)
+  const pinLatLon = useMemo(() => {
+    if (!grid || !probe) return null
+    const [lat, lon] = grid.latLonAt(probe[0], probe[1])
+    return { lat, lon }
+  }, [grid, probe])
   const draftPoints = useMemo(() => draft.points, [draft])
   const draftLabels = useMemo(() => draft.labels, [draft])
 
@@ -104,7 +124,7 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
     setMessage(null)
   }
   const createRoute = () => {
-    const { route, error } = new RoutePlanner(grid).customRoute(
+    const { route, error } = new RoutePlanner(routingGrid).customRoute(
       draft.points,
       customRoutes.filter((r) => !r.agent).length + 1,
       draft.stopNames,
@@ -159,6 +179,10 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
       setMessage('There is no terrain data there. Place points inside the mapped area.')
       return
     }
+    if (routingGrid.isBlocked(r, c)) {
+      setMessage('That spot is inside the dust storm. Place points outside the red area.')
+      return
+    }
     setMessage(grid.passable(i) ? null : 'That spot is steeper than 25°. The route will use the nearest safe ground.')
     const next = draft.place(placing, [r, c])
     setDraft(next)
@@ -182,6 +206,7 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
           draft={draftPoints}
           draftLabels={draftLabels}
           probe={probe}
+          storm={activeStorm}
           drawing={drawing}
           onRouteClick={selectRoute}
           onTerrainClick={addPoint}
@@ -203,6 +228,7 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
           draft={draftPoints}
           draftLabels={draftLabels}
           probe={probe}
+          storm={activeStorm}
           drawing={drawing}
           showHazards={showHazards}
           onRouteClick={selectRoute}
@@ -224,7 +250,6 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
         </button>
         <h1>{site.name}</h1>
         <p className="site-summary">{site.summary}</p>
-        {grid && <CoordinateSearch onFind={findInSite} placeholder={Coordinates.point(site.lat, site.lon)} />}
 
         {site.rover && (
           <section className="rover-card" aria-label={`${site.rover.name} mission data`}>
@@ -247,6 +272,8 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
           </section>
         )}
 
+        {grid && <CoordinateSearch onFind={findInSite} placeholder={Coordinates.point(site.lat, site.lon)} />}
+
         <div className="view-toggle" role="group" aria-label="View">
           <button type="button" aria-pressed={mode === '3d'} onClick={() => changeMode('3d')}>
             3D terrain
@@ -259,6 +286,15 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
           <label className="hazard-toggle">
             <input type="checkbox" checked={showHazards} onChange={(e) => setShowHazards(e.target.checked)} />
             Show steep ground
+          </label>
+        )}
+        {storm && (
+          <label className="hazard-toggle storm-toggle">
+            <input type="checkbox" checked={stormOn} onChange={(e) => setStormOn(e.target.checked)} />
+            <span>
+              Dust storm <span className="muted">(simulated)</span>
+              <span className="storm-hint">{stormOn ? 'Routes go around the red area.' : 'Off: routes ignore it.'}</span>
+            </span>
           </label>
         )}
 
@@ -292,6 +328,7 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
         <PointCard
           grid={grid}
           point={probe}
+          storm={routingGrid.isBlocked(probe[0], probe[1]) ? activeStorm.name : null}
           onClose={() => setProbe(null)}
           onStart={() => startDrawing('start', probe)}
           onDestination={() => startDrawing('end', probe)}
@@ -364,7 +401,9 @@ export default function SiteView({ site, customRoutes, onCustomRoutesChange, onB
       {grid && (
         <MartialChat
           site={site}
-          grid={grid}
+          grid={routingGrid}
+          storm={Boolean(activeStorm)}
+          pin={pinLatLon}
           routes={routes}
           open={chatOpen}
           minimized={chatMinimized}

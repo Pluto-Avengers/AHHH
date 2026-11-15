@@ -5,6 +5,7 @@ the same routing as src/core/TerrainGrid.js, so every number the agent uses come
 coordinates, distances, headings, elevations and slopes.
 """
 
+import copy
 import heapq
 import json
 import math
@@ -57,6 +58,16 @@ class TerrainGrid:
         if len(self.sky) != len(self.slope):
             self.sky = bytes([254]) * len(self.slope)
         self._least = {}  # radiation weight -> cheapest radiation factor on the site
+        self.blocked = None  # bytearray, 1 = closed to routes (a dust storm); None = nothing closed
+        self.blocked_reason = None
+
+    def with_blocked(self, mask, reason):
+        """A copy of this grid (sharing its terrain data) where the cells set in `mask` are closed to routes."""
+        clone = copy.copy(self)
+        clone.blocked = mask
+        clone.blocked_reason = reason
+        clone._least = {}
+        return clone
 
     @staticmethod
     def walk_speed_ms(grade):
@@ -75,7 +86,43 @@ class TerrainGrid:
 
     def passable(self, i):
         s = self.slope[i]
-        return s != NO_DATA and s <= MAX_SLOPE
+        return s != NO_DATA and s <= MAX_SLOPE and not (self.blocked and self.blocked[i])
+
+    def point_toward(self, r, c, bearing, distance_m=None):
+        """The walkable spot `distance_m` from (r, c) along a compass bearing (to the map's edge when
+        distance_m is None). Stops at the edge of the map, and steps back towards the start until the
+        ground is safe (not steep, no data or a closed storm). Returns {rc, distance_m, clipped, moved}
+        or None if nothing in that direction is walkable."""
+        rad = math.radians(bearing)
+        per_m = (-math.cos(rad) / self.ch, math.sin(rad) / self.cw)  # rows and cols per meter
+        # How far the map goes in that direction
+        limits = []
+        for v, d, hi in ((r, per_m[0], self.rows - 1), (c, per_m[1], self.cols - 1)):
+            if d > 1e-12:
+                limits.append((hi - v) / d)
+            elif d < -1e-12:
+                limits.append((0 - v) / d)
+        edge = max(0.0, min(limits)) if limits else 0.0
+        want = edge if distance_m is None else distance_m
+        t = min(want, edge)
+        step = min(self.cw, self.ch) / 2
+        start_t = t
+        while t > step:
+            rr, cc = round(r + per_m[0] * t), round(c + per_m[1] * t)
+            if self.in_bounds(rr, cc) and self.passable(self.index(rr, cc)):
+                return {
+                    "rc": (r + per_m[0] * t, c + per_m[1] * t),
+                    "distance_m": t,
+                    "clipped": distance_m is not None and distance_m > edge,
+                    "moved": start_t - t > step * 2,
+                }
+            t -= step
+        return None
+
+    def is_blocked(self, r, c):
+        """Is (r, c) inside a closed area (a dust storm)?"""
+        r, c = round(r), round(c)
+        return bool(self.blocked) and self.in_bounds(r, c) and self.blocked[self.index(r, c)] == 1
 
     def latlon_to_rc(self, lat, lon):
         r = (self.north - lat) / (self.north - self.south) * self.rows
@@ -169,6 +216,9 @@ class TerrainGrid:
 
     def plan(self, waypoints, slope_weight=SLOPE_WEIGHT, radiation_weight=RADIATION_WEIGHT):
         """Route through (row, col) waypoints in order. Returns {cells, stopCells} or {error}."""
+        for k, (r, c) in enumerate(waypoints):
+            if self.is_blocked(r, c):  # never quietly move a point out of a storm
+                return {"error": f"Point {k + 1} is inside the {self.blocked_reason}, which routes must avoid."}
         snapped = [self.snap(r, c) for r, c in waypoints]
         if None in snapped:
             k = snapped.index(None)

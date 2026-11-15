@@ -34,10 +34,12 @@ function suggestions(grid) {
  * open: the chat is open; minimized: it's open but shrunk to a chip (route details have the
  * space). It stays mounted either way, so the conversation and a reply mid-typing carry on.
  */
-export default function MartialChat({ site, grid, routes, onRoute, onHighlight, open, minimized, onOpen, onClose }) {
+export default function MartialChat({ site, grid, storm = false, pin = null, routes, onRoute, onHighlight, open, minimized, onOpen, onClose }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
+  // Martial's open follow-up question ({ message, need, choices }): sent back with the next message
+  const [question, setQuestion] = useState(null)
   const [elapsed, setElapsed] = useState(0)
   const [speaking, setSpeaking] = useState(false)
   const [health, setHealth] = useState(null)
@@ -112,7 +114,8 @@ export default function MartialChat({ site, grid, routes, onRoute, onHighlight, 
       onHighlight(res.highlight)
       routeName = routes.find((r) => r.id === res.highlight)?.name
     }
-    speak(res.reply, { skill: res.skill, source: res.source, routeName })
+    setQuestion(res.skill === 'CLARIFY' ? res.pending : null)
+    speak(res.reply, { skill: res.skill, source: res.source, routeName, choices: res.choices ?? [] })
   }
 
   const send = async (text) => {
@@ -125,7 +128,7 @@ export default function MartialChat({ site, grid, routes, onRoute, onHighlight, 
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      showResult(await martialClient.ask({ siteId: site.id, message, routes, signal: controller.signal }))
+      showResult(await martialClient.ask({ siteId: site.id, message, routes, storm, pin, pending: question, signal: controller.signal }))
     } catch (e) {
       if (e.name === 'AbortError') return
       speak(e.message, { error: true })
@@ -205,6 +208,15 @@ export default function MartialChat({ site, grid, routes, onRoute, onHighlight, 
               <pre>{m.text}</pre>
             )}
             {m.routeName && m.text.length > 0 && <p className="martial-shown">Shown on the map: {m.routeName}</p>}
+            {m.choices?.length > 0 && k === messages.length - 1 && question && !speaking && !pending && (
+              <div className="martial-choices" role="group" aria-label="Answers">
+                {m.choices.map((c) => (
+                  <button key={c} type="button" onClick={() => send(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {pending && (

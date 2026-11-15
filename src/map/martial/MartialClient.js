@@ -30,7 +30,7 @@ export class MartialClient {
    * Sends one request about a site. Resolves to { skill, source, reply, highlight?, route? }.
    * Throws BackendOfflineError, an Error with the back end's message, or an AbortError.
    */
-  async ask({ siteId, message, routes, signal }) {
+  async ask({ siteId, message, routes, storm = false, pin = null, pending = null, signal }) {
     let res
     try {
       res = await fetch(`${this.baseUrl}/agent`, {
@@ -40,7 +40,18 @@ export class MartialClient {
         body: JSON.stringify({
           site: siteId,
           message,
-          routes: routes.map((r) => ({ id: r.id, name: r.name, kind: r.kind, cells: r.cells })),
+          // Each route with its named stops, so Martial knows "the end of Your route 1" and the like
+          routes: routes.map((r) => ({
+            id: r.id,
+            name: r.name,
+            kind: r.kind,
+            agent: Boolean(r.agent),
+            cells: r.cells,
+            stops: (r.stops ?? []).map((s, k) => ({ name: s.name, cell: r.stopCells?.[k] ?? null })),
+          })),
+          pin, // { lat, lon } of the point pinned on the map: "from my pin", "to here"
+          pending, // the question Martial asked last, when this message answers it
+          storm, // the site's dust storm is shown: Martial's routes must go around it
         }),
       })
     } catch (e) {

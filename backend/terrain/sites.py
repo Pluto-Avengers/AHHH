@@ -3,6 +3,7 @@
 import threading
 
 from .grid import TerrainGrid
+from .storms import DustStorm
 
 
 class SiteCatalog:
@@ -17,7 +18,8 @@ class SiteCatalog:
     }
 
     def __init__(self):
-        self._grids = {}
+        self._grids = {}  # (site id, storm on?) -> grid
+        self.storms = DustStorm.load_all()  # site id -> DustStorm, for the sites that have one
         self._lock = threading.Lock()  # the server answers requests on several threads
 
     @property
@@ -29,13 +31,20 @@ class SiteCatalog:
         self._check(site_id)
         return self.INFO[site_id]
 
-    def grid(self, site_id):
-        """The site's terrain, read from disk once and then kept."""
+    def grid(self, site_id, storm=False):
+        """The site's terrain, read from disk once and then kept. With storm=True (and a storm at the
+        site), the storm area is closed to routes."""
         self._check(site_id)
         with self._lock:
-            if site_id not in self._grids:
-                self._grids[site_id] = TerrainGrid(site_id)
-            return self._grids[site_id]
+            if (site_id, False) not in self._grids:
+                self._grids[(site_id, False)] = TerrainGrid(site_id)
+            base = self._grids[(site_id, False)]
+            dust = self.storms.get(site_id) if storm else None
+            if not dust:
+                return base
+            if (site_id, True) not in self._grids:
+                self._grids[(site_id, True)] = base.with_blocked(dust.mask(base), dust.name)
+            return self._grids[(site_id, True)]
 
     def _check(self, site_id):
         if site_id not in self.INFO:

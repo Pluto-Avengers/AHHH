@@ -1,3 +1,4 @@
+import Coordinates from '../core/Coordinates.js'
 import RoutePlanner from '../core/RoutePlanner.js'
 
 const formatTime = (minutes) => {
@@ -87,17 +88,38 @@ export default function RouteInfo({ route, onClose, onDelete }) {
         </div>
       </dl>
       <p className="route-note">{risk.note}.</p>
+      {route.stormNote && <p className="route-storm-note">{route.stormNote}</p>}
 
       <Profile profile={stats.profile} />
+
+      {route.directions?.length > 0 && (
+        <details className="route-directions" key={route.id}>
+          <summary>
+            <span>Directions</span>
+            <span className="muted">{route.directions.filter((d) => !['start', 'stop', 'arrive'].includes(d.kind)).length} legs</span>
+          </summary>
+          <ol>
+            {route.directions.map((step, k) => (
+              <li key={k} className={`dir-${step.kind}`}>
+                <span className="dir-arrow" aria-hidden="true">
+                  {step.arrow}
+                </span>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
 
       {route.stops?.length > 0 && (
         <>
           <h3>Stops</h3>
           <ol className="route-stops">
-            {route.stops.map((stop) => (
-              <li key={stop.name}>
+            {route.stops.map((stop, k) => (
+              <li key={`${k}-${stop.name}`}>
                 {stop.name}
                 {stop.note && <span className="muted"> · {stop.note}</span>}
+                {stop.lat != null && <span className="stop-coords">{Coordinates.point(stop.lat, stop.lon)}</span>}
               </li>
             ))}
           </ol>

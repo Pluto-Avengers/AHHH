@@ -38,9 +38,9 @@ class RoutePreferenceSkill(Skill):
     def run(self, request: SiteRequest):
         grid, site, message = request.grid, request.site, request.message
         points, _ = request.reader.points(message)
-        departure = (points[0].row, points[0].col) if points and points[0].station is None else None
+        departure = (points[0].row, points[0].col) if points and points[0].kind != "station" else None
         candidates = RouteCandidates(grid)
-        routes = candidates.build(request.client_routes, departure)
+        routes = candidates.build(request.client_routes, departure, points[0].station if departure else None)
         if not routes:
             raise AgentError("The map has no safe routes from that point. Try a departure closer to the landing site.")
         ranking = candidates.ranking(routes)
