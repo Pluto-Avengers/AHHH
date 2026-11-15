@@ -540,6 +540,7 @@
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
+  object-position: center 22%; /* keep faces in frame when a tall photo is cropped */
   margin-bottom: 16px;
   border-bottom: 4px solid var(--spice);
 }
