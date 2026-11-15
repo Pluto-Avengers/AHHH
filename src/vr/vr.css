@@ -1,0 +1,86 @@
+/* VR page only */
+.vr-page {
+  position: relative;
+  height: calc(100vh - var(--nav-h));
+  overflow: hidden;
+  background: #000;
+  font-size: 14px;
+}
+
+.vr-canvas {
+  position: absolute !important;
+  inset: 0;
+}
+
+.vr-intro {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 300px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid var(--line);
+}
+
+.vr-intro h1 {
+  font-size: 22px;
+}
+
+.vr-intro p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.vr-page .muted {
+  color: var(--muted);
+}
+
+.vr-intro .button {
+  margin-top: 16px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.vr-intro .button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vr-intro .button:disabled:hover {
+  background: none;
+  color: var(--text);
+}
+
+.vr-support {
+  font-size: 13px;
+}
+
+@media (pointer: coarse) {
+  .vr-intro .button {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  .vr-intro {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    border-width: 1px 0 0;
+  }
+}
+
+.vr-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  pointer-events: none;
+}

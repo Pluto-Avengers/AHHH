@@ -1,0 +1,1 @@
+{"id": "elysium", "rows": 395, "cols": 263, "cell_m": [17.94, 18.0], "elevation": [-2637.71, -2587.12], "bounds": [[4.44, 135.565], [4.56, 135.645]], "stations": [{"name": "InSight lander", "lat": 4.502, "lon": 135.623, "rc": [191.0, 191.04]}, {"name": "Nearby high ground", "lat": 4.491092, "lon": 135.580104, "rc": [226.92, 49.75]}], "reference": null}
