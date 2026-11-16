@@ -1,7 +1,7 @@
 // Landing sites shown on the Mars map.
 // Each has HiRISE terrain exported to /public/sites/<id>/ by scripts/export_sites.py.
 // bounds: [[south, west], [north, east]] of the 3D terrain area.
-// rover: the mission that worked there and what it collected (figures from NASA, JPL and CNSA).
+// rover: the mission that worked there and what it collected (figures from NASA, JPL and NASA's HiRISE camera).
 
 export const SITES = [
   {
@@ -159,26 +159,26 @@ export const SITES = [
   {
     id: 'utopia',
     name: 'Utopia Planitia',
-    lat: 25.05,
-    lon: 109.92,
-    bounds: [[25.01, 109.875], [25.1, 109.975]],
+    lat: 25.102, // centre of NASA's HiRISE images of the lander (ESP_069665_2055, ESP_069731_2055)
+    lon: 109.914,
+    bounds: [[25.055, 109.865], [25.145, 109.965]],
     mission: 'Zhurong landed 2021',
     marker: 'above', // keeps clear of Jezero and Elysium on the world map
     summary:
-      'Southern edge of Utopia Planitia, a huge lowland that may once have held an ocean. Zhurong drove south from its lander.',
+      "Southern Utopia Planitia: smooth, mostly boulder-free plains with windblown ridges. NASA's HiRISE camera watched Zhurong drive south from its lander.",
     rover: {
       name: 'Zhurong',
-      agency: 'CNSA rover (Tianwen-1)',
+      agency: 'Tianwen-1 rover, seen by NASA HiRISE',
       stats: [
         ['Landed', 'May 14, 2021'],
-        ['Last active', 'May 20, 2022'],
-        ['Distance driven', '1,921 m'],
-        ['Planned mission', '90 sols'],
+        ['First HiRISE image', 'June 6, 2021'],
+        ['Height range nearby', '23 m'],
+        ['Imaged again by HiRISE', 'Feb 11, 2024'],
       ],
       collected: [
-        'Ground-penetrating radar profiles of layers buried under the plain.',
-        'Salty, hardened crusts on the surface, a sign of past water.',
-        'Images and weather readings along its drive south.',
+        'HiRISE images showing the lander, its blast mark, parachute and heat shield.',
+        'Before-and-after images showing the rover driving south from the lander.',
+        'A 3D terrain model of the landing area: flat plains with mesas to the southwest and possible small volcanoes.',
       ],
     },
   },
