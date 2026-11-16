@@ -61,6 +61,11 @@ export default function Credits() {
                 ))}
               </tbody>
             </table>
+            <p style={{ marginTop: 24 }}>
+              Super Intelligence tools were used to organize, create, and debug code throughout the project.
+              Specifically, it organized UI for device compatibility, optimized virtual reality rendering, polished
+              code formatting for efficient debugging, and helped debug our Ollama model's instructions.
+            </p>
           </div>
         </div>
       </section>
